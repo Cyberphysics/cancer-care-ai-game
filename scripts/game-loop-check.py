@@ -11,22 +11,27 @@ Exits non-zero if any check fails. Prints one line per check.
 
 import argparse
 import json
+import os
 import subprocess
 import sys
 import urllib.error
 import urllib.request
 
-GREEN = "\033[32m"
-RED = "\033[31m"
-RESET = "\033[0m"
+# Colour only to a real terminal, and never when NO_COLOR is set. Markers stay
+# ASCII: dingbats and box-drawing characters have no glyph in many terminal
+# fonts and render as mojibake, which makes a passing test look broken.
+_COLOUR = sys.stdout.isatty() and not os.environ.get("NO_COLOR")
+GREEN = "\033[32m" if _COLOUR else ""
+RED = "\033[31m" if _COLOUR else ""
+RESET = "\033[0m" if _COLOUR else ""
 
 results: list[tuple[str, bool, str]] = []
 
 
 def check(label: str, passed: bool, detail: str = "") -> bool:
     results.append((label, passed, detail))
-    mark = f"{GREEN}✓{RESET}" if passed else f"{RED}✗{RESET}"
-    print(f"  {mark} {label:<46}{'' if passed else '  ' + detail}")
+    mark = f"{GREEN}[ OK ]{RESET}" if passed else f"{RED}[FAIL]{RESET}"
+    print(f"  {mark} {label:<44}{'' if passed else '  ' + detail}")
     return passed
 
 
@@ -72,28 +77,28 @@ def main() -> int:
 
     # --- health ------------------------------------------------------------
     status, health = call(api, "GET", "/health")
-    check("GET /health → 200", status == 200, str(status))
+    check("GET /health -> 200", status == 200, str(status))
     table = health.get("tableName", "")
     check("health 报告 event catalog", health.get("catalogEvents", 0) >= 5,
           str(health.get("catalogEvents")))
 
     # --- players -----------------------------------------------------------
     status, player = call(api, "POST", "/players", {"nickname": "冒烟测试守护者"})
-    check("POST /players → 201", status == 201, str(status))
+    check("POST /players -> 201", status == 201, str(status))
     player_id = player.get("playerId", "")
     check("响应含 playerId", bool(player_id))
 
     status, fetched = call(api, "GET", f"/players/{player_id}")
-    check("GET /players/{id} → 200", status == 200, str(status))
+    check("GET /players/{id} -> 200", status == 200, str(status))
     check("昵称往返一致", fetched.get("nickname") == "冒烟测试守护者",
           repr(fetched.get("nickname")))
 
     status, _ = call(api, "GET", "/players/plr_does_not_exist")
-    check("未知玩家 → 404", status == 404, str(status))
+    check("未知玩家 -> 404", status == 404, str(status))
 
     # --- session -----------------------------------------------------------
     status, session = call(api, "POST", "/sessions", {"playerId": player_id})
-    check("POST /sessions → 201", status == 201, str(status))
+    check("POST /sessions -> 201", status == 201, str(status))
     session_id = session.get("sessionId", "")
     event = session.get("activeEvent") or {}
 
@@ -109,7 +114,7 @@ def main() -> int:
     choice_id = event["choices"][0]["id"]
     status, result = call(api, "POST", f"/sessions/{session_id}/choices",
                           {"eventId": event.get("eventId"), "choiceId": choice_id})
-    check("POST /choices → 200", status == 200, str(status))
+    check("POST /choices -> 200", status == 200, str(status))
     check("返回 impact 与 rationale",
           bool(result.get("appliedImpact")) and bool(result.get("rationale")))
     check("健康值限制在 0-100",
@@ -122,19 +127,19 @@ def main() -> int:
     # --- idempotency / optimistic locking ----------------------------------
     status, _ = call(api, "POST", f"/sessions/{session_id}/choices",
                      {"eventId": event.get("eventId"), "choiceId": choice_id})
-    check("重复提交同一选择 → 409（幂等保护）", status == 409, str(status))
+    check("重复提交同一选择 -> 409（幂等保护）", status == 409, str(status))
 
     status, _ = call(api, "POST", f"/sessions/{session_id}/choices",
                      {"eventId": "evt_stale", "choiceId": choice_id})
-    check("过期 eventId → 409", status == 409, str(status))
+    check("过期 eventId -> 409", status == 409, str(status))
 
     if not result.get("awaitingAdvance"):
         status, _ = call(api, "POST", f"/sessions/{session_id}/advance")
-        check("事件未答完时推进 → 409（阶段边界受保护）", status == 409, str(status))
+        check("事件未答完时推进 -> 409（阶段边界受保护）", status == 409, str(status))
 
     # --- timeline ----------------------------------------------------------
     status, events = call(api, "GET", f"/sessions/{session_id}/events")
-    check("GET /events → 200", status == 200, str(status))
+    check("GET /events -> 200", status == 200, str(status))
     check("时间线含已作答事件",
           any(e.get("chosenChoiceId") for e in events.get("events", [])))
 
