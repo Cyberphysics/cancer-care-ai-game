@@ -1,0 +1,4 @@
+# Pinned deliberately: the ARM64 zip is built by cross-resolving wheels, and an
+# unpinned bump is the most likely way to pull in a package with no aarch64
+# wheel and break the build (or worse, silently fall back to an sdist).
+bedrock-agentcore==1.24.1

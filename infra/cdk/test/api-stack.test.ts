@@ -9,7 +9,15 @@ function buildTemplate(): Template {
   const env = testEnv();
   const config = testConfig();
   const data = new DataStack(app, 'TestDataStack', { env, config });
-  return Template.fromStack(new ApiStack(app, 'TestApiStack', { env, config, table: data.table }));
+  return Template.fromStack(
+    new ApiStack(app, 'TestApiStack', {
+      env,
+      config,
+      table: data.table,
+      agentRuntimeArn:
+        'arn:aws:bedrock-agentcore:us-east-1:016998011445:runtime/cancercare_game_master-abc123',
+    }),
+  );
 }
 
 describe('ApiStack', () => {
@@ -23,9 +31,9 @@ describe('ApiStack', () => {
     });
   });
 
-  test('exposes all eight game-loop routes on an HTTP API', () => {
+  test('exposes every game-loop route plus the AI narration route', () => {
     template.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
-    template.resourceCountIs('AWS::ApiGatewayV2::Route', 8);
+    template.resourceCountIs('AWS::ApiGatewayV2::Route', 9);
 
     for (const route of [
       'GET /api/v1/health',
@@ -36,6 +44,7 @@ describe('ApiStack', () => {
       'GET /api/v1/sessions/{sessionId}/events',
       'POST /api/v1/sessions/{sessionId}/choices',
       'POST /api/v1/sessions/{sessionId}/advance',
+      'POST /api/v1/sessions/{sessionId}/narration',
     ]) {
       const [method, path] = route.split(' ');
       template.hasResourceProperties('AWS::ApiGatewayV2::Route', {

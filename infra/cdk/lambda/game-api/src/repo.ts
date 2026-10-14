@@ -6,11 +6,12 @@ import {
   type TransactWriteCommandInput,
 } from '@aws-sdk/lib-dynamodb';
 import { docClient, tableName } from './lib/ddb';
-import { omitUndefined, playerKey, sessionKey, type PrimaryKey } from './lib/keys';
+import { narrationKey, omitUndefined, playerKey, sessionKey, type PrimaryKey } from './lib/keys';
 import type {
   EventItem,
   Health,
   HealthDelta,
+  NarrationItem,
   PatientItem,
   PlayerItem,
   SessionItem,
@@ -68,6 +69,27 @@ export async function getSession(sessionId: string): Promise<SessionItem | undef
 export async function getItemAt(key: PrimaryKey): Promise<Record<string, unknown> | undefined> {
   const result = await docClient.send(new GetCommand({ TableName: tableName(), Key: key }));
   return result.Item;
+}
+
+export async function getNarration(
+  sessionId: string,
+  kind: string,
+): Promise<NarrationItem | undefined> {
+  const item = await getItemAt(narrationKey(sessionId, kind));
+  return item as NarrationItem | undefined;
+}
+
+/**
+ * Cache a generated narration.
+ *
+ * No conditional expression: this item holds derived data that nothing else
+ * races on, so a plain overwrite is correct, and a failed write is survivable.
+ * Contrast with every write to game state, which is version-guarded.
+ */
+export async function putNarration(item: NarrationItem): Promise<void> {
+  await docClient.send(
+    new PutCommand({ TableName: tableName(), Item: omitUndefined(item) }),
+  );
 }
 
 /** Everything in a session partition, in sort-key order (event keys sort chronologically). */

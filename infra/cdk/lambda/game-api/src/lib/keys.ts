@@ -8,7 +8,12 @@
  * data at runtime.
  */
 
-export type EntityType = 'Player' | 'GameSession' | 'PatientState' | 'EventHistory';
+export type EntityType =
+  | 'Player'
+  | 'GameSession'
+  | 'PatientState'
+  | 'EventHistory'
+  | 'Narration';
 
 /** Attribute names. Kept in sync with `DDB` in infra/cdk/lib/naming.ts. */
 export const ATTR = {
@@ -45,6 +50,18 @@ export function patientKey(sessionId: string, patientId: string): PrimaryKey {
 
 export function eventKey(sessionId: string, timestamp: string, eventId: string): PrimaryKey {
   return { PK: `SESSION#${sessionId}`, SK: `EVENT#${timestamp}#${eventId}` };
+}
+
+/**
+ * Agent-generated narration for a session.
+ *
+ * Its own item rather than a field on the session, so that caching generated text
+ * never contends with the optimistic lock the game uses for real state. A lost
+ * cache write costs one regeneration; a lost game write would corrupt a
+ * playthrough. Merging them would make the two indistinguishable.
+ */
+export function narrationKey(sessionId: string, kind: string): PrimaryKey {
+  return { PK: `SESSION#${sessionId}`, SK: `NARRATION#${kind}` };
 }
 
 /**

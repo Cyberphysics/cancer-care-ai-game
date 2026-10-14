@@ -1,6 +1,15 @@
 # Dependencies
 node_modules/
 
+# Python (agent) — build artifacts and local environments
+agents/*/.build/
+agents/*/dist/
+agents/*/.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+
+
 # Build outputs
 dist/
 build/

@@ -53,6 +53,17 @@ export function conflict(message: string, details?: unknown): ApiResponse {
   return errorResponse(409, 'CONFLICT', message, details);
 }
 
+/**
+ * An upstream dependency failed — here, the agent runtime or the model behind it.
+ *
+ * Distinct from a 500 on purpose: the game API itself is healthy, and the
+ * playable part of the game is unaffected. A 502 tells the client it can carry
+ * on without the AI layer, which is exactly the intended behaviour.
+ */
+export function badGateway(message: string, details?: unknown): ApiResponse {
+  return errorResponse(502, 'UPSTREAM_FAILED', message, details);
+}
+
 export function serverError(err: unknown): ApiResponse {
   const message = err instanceof Error ? err.message : String(err);
   return errorResponse(500, 'INTERNAL_ERROR', message);

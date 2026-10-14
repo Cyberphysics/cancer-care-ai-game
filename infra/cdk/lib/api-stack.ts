@@ -3,6 +3,7 @@ import * as cdk from 'aws-cdk-lib';
 import * as apigatewayv2 from 'aws-cdk-lib/aws-apigatewayv2';
 import * as integrations from 'aws-cdk-lib/aws-apigatewayv2-integrations';
 import * as dynamodb from 'aws-cdk-lib/aws-dynamodb';
+import * as iam from 'aws-cdk-lib/aws-iam';
 import * as lambda from 'aws-cdk-lib/aws-lambda';
 import * as lambdaNode from 'aws-cdk-lib/aws-lambda-nodejs';
 import * as logs from 'aws-cdk-lib/aws-logs';
@@ -14,6 +15,8 @@ export interface ApiStackProps extends cdk.StackProps {
   readonly config: AppConfig;
   /** Table from the Data stack — passed as a construct so the IAM grant stays scoped. */
   readonly table: dynamodb.Table;
+  /** ARN of the GameMaster agent runtime, invoked by the narration route. */
+  readonly agentRuntimeArn: string;
 }
 
 const API_PREFIX = '/api/v1';
@@ -41,7 +44,7 @@ export class ApiStack extends cdk.Stack {
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
-    const { config, table } = props;
+    const { config, table, agentRuntimeArn } = props;
 
     const logGroup = new logs.LogGroup(this, 'GameApiLogs', {
       logGroupName: `/aws/lambda/${resourceName('api')}`,
@@ -60,13 +63,18 @@ export class ApiStack extends cdk.Stack {
       // a nasty surprise when the agent code lands in Phase 3.
       architecture: lambda.Architecture.ARM_64,
       memorySize: 512,
-      timeout: cdk.Duration.seconds(10),
+      // Sized for the narration route, which waits on the agent runtime and the
+      // model. The binding limit is API Gateway's ~30 s integration timeout —
+      // go over that and the caller sees an opaque 504 instead of the real
+      // error. The agent's own provider timeout is set below both.
+      timeout: cdk.Duration.seconds(29),
       tracing: lambda.Tracing.ACTIVE,
       logGroup,
       environment: {
         TABLE_NAME: table.tableName,
         STAGE: config.stage,
         LOG_LEVEL: config.stage === 'prod' ? 'info' : 'debug',
+        AGENT_RUNTIME_ARN: agentRuntimeArn,
       },
       bundling: {
         minify: true,
@@ -86,6 +94,17 @@ export class ApiStack extends cdk.Stack {
 
     // Least privilege: read/write on this one table, nothing else.
     table.grantReadWriteData(fn);
+
+    // Invoke the agent runtime. Scoped to the runtime and its endpoints — the
+    // runtime ARN alone is not sufficient, AgentCore also authorises the
+    // `/runtime-endpoint/*` form.
+    fn.addToRolePolicy(
+      new iam.PolicyStatement({
+        sid: 'InvokeGameMasterRuntime',
+        actions: ['bedrock-agentcore:InvokeAgentRuntime'],
+        resources: [agentRuntimeArn, `${agentRuntimeArn}/*`],
+      }),
+    );
 
     const api = new apigatewayv2.HttpApi(this, 'GameApi', {
       apiName: resourceName('api'),
@@ -120,6 +139,10 @@ export class ApiStack extends cdk.Stack {
       },
       {
         path: `${API_PREFIX}/sessions/{sessionId}/advance`,
+        methods: [apigatewayv2.HttpMethod.POST],
+      },
+      {
+        path: `${API_PREFIX}/sessions/{sessionId}/narration`,
         methods: [apigatewayv2.HttpMethod.POST],
       },
     ];

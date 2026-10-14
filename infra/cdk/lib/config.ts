@@ -16,6 +16,15 @@ export const AWS_REGION = 'us-east-1';
 /** Short slug used for AWS resource names. */
 export const APP_NAME = 'cancercare-game-mvp';
 
+/**
+ * SSM Parameter Store name holding the DeepSeek API key as a SecureString.
+ *
+ * Deliberately not an environment variable: env vars on a runtime version are
+ * readable by anyone with control-plane read access, and they surface in the
+ * console. The value is created out-of-band — see docs/DEPLOYMENT.md.
+ */
+export const DEEPSEEK_API_KEY_PARAMETER = '/cancercare-game-mvp/deepseek-api-key';
+
 /** PascalCase prefix used for CloudFormation stack names. */
 export const STACK_PREFIX = 'CancercareGameMvp';
 

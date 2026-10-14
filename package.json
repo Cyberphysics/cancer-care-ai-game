@@ -8,10 +8,12 @@
     "install:all": "npm --prefix frontend install && npm --prefix infra/cdk install",
     "dev:web": "npm --prefix frontend run dev",
     "build:web": "npm --prefix frontend run build",
+    "build:agent": "./agents/game-master/build.sh",
+    "test:agent": "cd agents/game-master && .venv/bin/python -m pytest tests/ -q",
     "synth": "npm --prefix infra/cdk run synth",
     "diff": "npm --prefix infra/cdk run diff",
     "test": "npm --prefix infra/cdk test",
-    "deploy": "npm run build:web && npm --prefix infra/cdk run deploy",
+    "deploy": "npm run build:web && npm run build:agent && npm --prefix infra/cdk run deploy",
     "destroy": "npm --prefix infra/cdk run destroy"
   },
   "engines": {

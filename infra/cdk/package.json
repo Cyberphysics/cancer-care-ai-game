@@ -14,6 +14,7 @@
     "deploy:data": "cdk deploy CancercareGameMvp-Data --profile cancercare-game-mvp",
     "deploy:api": "cdk deploy CancercareGameMvp-Api --profile cancercare-game-mvp",
     "deploy:frontend": "cdk deploy CancercareGameMvp-Frontend --profile cancercare-game-mvp",
+    "deploy:agent": "cdk deploy CancercareGameMvp-Agent --profile cancercare-game-mvp",
     "destroy": "cdk destroy --all --profile cancercare-game-mvp",
     "cdk": "cdk"
   },
@@ -22,12 +23,13 @@
     "@swc/jest": "^0.2.39",
     "@types/jest": "^30",
     "@types/node": "^24.10.1",
-    "jest": "^30",
     "aws-cdk": "2.1145.0",
+    "jest": "^30",
     "tsx": "^4.23.0",
     "typescript": "~7.0.2"
   },
   "dependencies": {
+    "@aws-sdk/client-bedrock-agentcore": "^3.1151.0",
     "@aws-sdk/client-dynamodb": "^3.700.0",
     "@aws-sdk/lib-dynamodb": "^3.700.0",
     "aws-cdk-lib": "2.273.0",

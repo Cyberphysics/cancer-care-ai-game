@@ -12,6 +12,7 @@ import {
   handleGetSession,
   handleHealth,
   handleListEvents,
+  handleNarration,
   handleSubmitChoice,
 } from './handlers';
 import {
@@ -59,6 +60,13 @@ const ROUTES: readonly RouteDefinition[] = [
     method: 'POST',
     pattern: '/api/v1/sessions/{sessionId}/advance',
     handler: handleAdvance,
+  },
+  {
+    // The AI layer. Deliberately a separate route from the game loop: the
+    // playable path never depends on it.
+    method: 'POST',
+    pattern: '/api/v1/sessions/{sessionId}/narration',
+    handler: handleNarration,
   },
 ];
 

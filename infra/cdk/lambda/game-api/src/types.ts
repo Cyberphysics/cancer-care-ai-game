@@ -194,6 +194,24 @@ export interface ChoiceOption {
   readonly text: string;
 }
 
+export type NarrationKind = 'choice' | 'summary';
+
+/**
+ * Cached agent output. Derived data — losing it costs a regeneration and nothing
+ * else, which is why it lives in its own item rather than on the session.
+ */
+export interface NarrationItem extends BaseItem {
+  readonly entityType: 'Narration';
+  readonly sessionId: string;
+  readonly kind: NarrationKind;
+  readonly text: string;
+  readonly provider: string;
+  readonly modelId: string;
+  /** True when the content guard rejected the model output and a generic text was used. */
+  readonly degraded: boolean;
+  readonly generatedAt: string;
+}
+
 /* ------------------------------------------------------------------ *
  * Content catalog (see content/events.ts, content/patients.ts)
  * ------------------------------------------------------------------ */

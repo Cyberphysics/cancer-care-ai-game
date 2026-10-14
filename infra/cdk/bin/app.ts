@@ -1,7 +1,8 @@
 #!/usr/bin/env node
 import * as cdk from 'aws-cdk-lib';
+import { AgentStack } from '../lib/agent-stack';
 import { ApiStack } from '../lib/api-stack';
-import { loadConfig } from '../lib/config';
+import { DEEPSEEK_API_KEY_PARAMETER, loadConfig } from '../lib/config';
 import { DataStack } from '../lib/data-stack';
 import { FrontendStack } from '../lib/frontend-stack';
 import { stackName } from '../lib/naming';
@@ -16,10 +17,18 @@ const env: cdk.Environment = { account: config.account, region: config.region };
 
 const data = new DataStack(app, stackName(config.stackPrefix, 'Data'), { env, config });
 
+const agent = new AgentStack(app, stackName(config.stackPrefix, 'Agent'), {
+  env,
+  config,
+  apiKeyParameterName: DEEPSEEK_API_KEY_PARAMETER,
+});
+
 const api = new ApiStack(app, stackName(config.stackPrefix, 'Api'), {
   env,
   config,
   table: data.table,
+  // The game API invokes the agent runtime for the narration endpoints.
+  agentRuntimeArn: agent.runtime.agentRuntimeArn,
 });
 
 new FrontendStack(app, stackName(config.stackPrefix, 'Frontend'), {

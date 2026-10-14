@@ -23,6 +23,18 @@ export function stackName(prefix: string, component: string): string {
   return `${prefix}-${component}`;
 }
 
+/**
+ * Name for an AgentCore resource (Memory, Runtime, Gateway).
+ *
+ * The service enforces `^[a-zA-Z][a-zA-Z0-9_]{0,47}$` — **hyphens are rejected**
+ * even though they are legal almost everywhere else in AWS. The project slug is
+ * kebab-case, so it has to be transliterated here rather than reused directly.
+ * Violations surface as a synthesis-time validation error, not at deploy.
+ */
+export function agentCoreName(suffix: string): string {
+  return `${APP_NAME.replace(/-/g, '_')}_${suffix}`;
+}
+
 /** DynamoDB attribute and index names (see docs/DATA-MODEL.md). */
 export const DDB = {
   partitionKey: 'PK',

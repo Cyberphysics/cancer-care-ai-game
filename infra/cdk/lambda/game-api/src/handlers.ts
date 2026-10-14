@@ -1,3 +1,4 @@
+import { AgentUnavailableError, invokeGameMaster, type NarrationRequest } from './agent';
 import { DISCLAIMER, EVENT_CATALOG } from './content/events';
 import {
   DEFAULT_PATIENT_TEMPLATE_ID,
@@ -5,8 +6,10 @@ import {
   pickPatientTemplate,
 } from './content/patients';
 import { advanceStage, applyChoice, buildEventItem } from './domain/engine';
+import { sanitize } from './domain/safety';
 import { newEventId, newPatientId, newPlayerId, newSessionId } from './lib/ids';
 import {
+  narrationKey,
   nowIso,
   omitUndefined,
   patientKey,
@@ -18,9 +21,11 @@ import {
 import {
   createSessionTransaction,
   getItemAt,
+  getNarration,
   getPlayer,
   getSession,
   listEvents,
+  putNarration,
   putPlayer,
   submitChoiceTransaction,
   advanceStageTransaction,
@@ -42,7 +47,7 @@ import type {
   SubmitChoiceResponse,
 } from './types';
 import { STAGE_ORDER } from './types';
-import { badRequest, conflict, created, notFound, ok } from './responses';
+import { badGateway, badRequest, conflict, created, notFound, ok } from './responses';
 
 /** Demo sessions expire on their own; the table's TTL attribute consumes this. */
 const SESSION_TTL_DAYS = 7;
@@ -532,6 +537,138 @@ export async function handleAdvance(event: HttpApiEvent) {
   };
 
   return ok(response);
+}
+
+/* ------------------------------------------------------------------ *
+ * Agent narration
+ * ------------------------------------------------------------------ */
+
+/** Trim an event down to what the model needs — no ids, no bookkeeping. */
+function toNarrationEvent(item: EventItem) {
+  const chosenText =
+    item.choices.find((choice) => choice.id === item.chosenChoiceId)?.text ?? '(未记录)';
+  return {
+    stage: item.stage,
+    title: item.title,
+    chosenChoiceText: chosenText,
+    impact: item.impact,
+  };
+}
+
+/**
+ * Generate (or return cached) agent narration for a session.
+ *
+ * Failure here is reported as 502 and **changes nothing about the game**. The
+ * playable loop does not call this endpoint; a player can complete all five
+ * stages with the agent permanently unavailable. That isolation is deliberate —
+ * see docs/ARCHITECTURE.md §1.
+ */
+export async function handleNarration(event: HttpApiEvent) {
+  const sessionId = event.pathParameters?.sessionId;
+  if (!sessionId) return badRequest('Missing path parameter "sessionId"');
+
+  const parsed = parseJsonBody<NarrationRequest>(event);
+  if (!parsed.ok) return badRequest(parsed.error);
+
+  const { kind } = parsed.value;
+  if (kind !== 'choice' && kind !== 'summary') {
+    return badRequest(`Field "kind" must be "choice" or "summary", got ${JSON.stringify(kind)}`);
+  }
+
+  const session = await getSession(sessionId);
+  if (!session) return notFound(`Session ${sessionId} not found`);
+
+  const cached = await getNarration(sessionId, kind);
+  if (cached) {
+    return ok({
+      text: cached.text,
+      kind,
+      provider: cached.provider,
+      modelId: cached.modelId,
+      degraded: cached.degraded,
+      generatedAt: cached.generatedAt,
+      cached: true,
+    });
+  }
+
+  const patientItem = (await getItemAt(
+    patientKey(sessionId, session.patientId),
+  )) as PatientItem | undefined;
+  if (!patientItem) return notFound(`Patient state for session ${sessionId} not found`);
+
+  const answered = (await listEvents(sessionId)).filter((item) => item.chosenChoiceId);
+  if (kind === 'choice' && answered.length === 0) {
+    return conflict('No choice has been made yet, so there is nothing to explain');
+  }
+
+  const request: NarrationRequest = {
+    kind,
+    playerId: session.playerId,
+    sessionId,
+    patient: patientItem.profile,
+    session: {
+      stage: session.currentStage,
+      stageIndex: session.stageIndex,
+      score: session.score,
+      status: session.status,
+      qualityOfLife: session.qol,
+    },
+    health: patientItem.health,
+    events: answered.map(toNarrationEvent),
+    ...(kind === 'choice' ? { focusEvent: toNarrationEvent(answered[answered.length - 1]) } : {}),
+  };
+
+  let result;
+  try {
+    result = await invokeGameMaster(request);
+  } catch (err) {
+    if (err instanceof AgentUnavailableError) {
+      return badGateway(`Agent 不可用：${err.message}`);
+    }
+    throw err;
+  }
+
+  if (!result.ok || !result.text) {
+    return badGateway(`Agent 生成失败：${result.error ?? 'unknown error'}`, {
+      errorType: result.errorType,
+    });
+  }
+
+  // Second line of defence: the agent guards its own output, but the backend
+  // does not take that on trust.
+  const { text, degraded } = sanitize(result.text);
+  const generatedAt = result.generatedAt ?? nowIso();
+
+  try {
+    await putNarration({
+      ...narrationKey(sessionId, kind),
+      entityType: 'Narration',
+      sessionId,
+      kind,
+      text,
+      provider: result.provider ?? 'unknown',
+      modelId: result.modelId ?? 'unknown',
+      degraded,
+      generatedAt,
+      createdAt: generatedAt,
+      updatedAt: generatedAt,
+      expiresAt: ttlFromNow(SESSION_TTL_DAYS),
+    });
+  } catch (err) {
+    // A cache write failing costs one regeneration and nothing else. Serving
+    // the text we already have is strictly better than failing the request.
+    console.warn('narration cache write failed', err);
+  }
+
+  return ok({
+    text,
+    kind,
+    provider: result.provider,
+    modelId: result.modelId,
+    degraded,
+    generatedAt,
+    cached: false,
+  });
 }
 
 /* ------------------------------------------------------------------ *
