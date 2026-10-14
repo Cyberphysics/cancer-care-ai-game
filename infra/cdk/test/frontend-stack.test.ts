@@ -8,7 +8,11 @@ import { testConfig, testEnv } from './helpers';
 function buildTemplate(): Template {
   const app = new cdk.App();
   return Template.fromStack(
-    new FrontendStack(app, 'TestFrontendStack', { env: testEnv(), config: testConfig() }),
+    new FrontendStack(app, 'TestFrontendStack', {
+      env: testEnv(),
+      config: testConfig(),
+      apiDomainName: 'abc123.execute-api.us-east-1.amazonaws.com',
+    }),
   );
 }
 
@@ -45,12 +49,46 @@ describe('FrontendStack', () => {
     });
   });
 
-  test('serves /assets/* from a cache-optimized behavior alongside the default', () => {
+  test('adds exactly the /assets/* and /api/* behaviors', () => {
     const distributions = template.findResources('AWS::CloudFront::Distribution');
     const [distribution] = Object.values(distributions);
     const behaviors = distribution.Properties.DistributionConfig.CacheBehaviors ?? [];
-    expect(behaviors).toHaveLength(1);
-    expect(behaviors[0].PathPattern).toBe('/assets/*');
+    expect(behaviors.map((b: { PathPattern: string }) => b.PathPattern).sort()).toEqual([
+      '/api/*',
+      '/assets/*',
+    ]);
+  });
+
+  test('proxies /api/* to API Gateway without leaking the viewer Host header', () => {
+    const distributions = template.findResources('AWS::CloudFront::Distribution');
+    const [distribution] = Object.values(distributions);
+    const behaviors = distribution.Properties.DistributionConfig.CacheBehaviors ?? [];
+    const api = behaviors.find((b: { PathPattern: string }) => b.PathPattern === '/api/*');
+
+    expect(api).toBeDefined();
+
+    // Load-bearing: without this policy CloudFront forwards the viewer's Host
+    // header and API Gateway rejects the request with an opaque 403.
+    expect(api.OriginRequestPolicyId).toBeDefined();
+    expect(api.AllowedMethods).toContain('POST');
+    expect(api.ViewerProtocolPolicy).toBe('redirect-to-https');
+
+    // The API must not share the assets' cache policy. Asserting they differ is
+    // stronger than naming either one: it survives a CDK default changing.
+    const assets = behaviors.find((b: { PathPattern: string }) => b.PathPattern === '/assets/*');
+    expect(api.CachePolicyId).toBeDefined();
+    expect(api.CachePolicyId).not.toBe(assets.CachePolicyId);
+
+    const origins = distribution.Properties.DistributionConfig.Origins;
+    const apiOrigin = origins.find(
+      (o: { DomainName: unknown }) =>
+        typeof o.DomainName === 'string' && o.DomainName.includes('execute-api'),
+    );
+    expect(apiOrigin).toBeDefined();
+    // A custom origin (not an S3 origin), reached over TLS only.
+    expect(apiOrigin.CustomOriginConfig).toMatchObject({
+      OriginProtocolPolicy: 'https-only',
+    });
   });
 
   test('ships a CloudFront Function for SPA routing, bound to the default behavior only', () => {

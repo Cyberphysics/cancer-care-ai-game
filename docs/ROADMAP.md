@@ -10,7 +10,7 @@
 |---|---|---|---|
 | **0** ✅ | 文档 + CDK 骨架 + 桩 API + 静态前端托管 | CloudFront 页面可访问；`/health` 返回 200；DynamoDB 表与 GSI 存在 | `v0.1.0` |
 | **1** | 基础项目收尾（GDD 原定内容） | 由 Phase 0 大部分覆盖，仅补齐缺口 | `v0.2.0` |
-| **2** | 游戏核心：PatientState 演进、Event Engine、Choice System | 不依赖任何 LLM，用规则引擎跑通完整五阶段流程 | `v0.3.0` |
+| **2** ✅ | 游戏核心：PatientState 演进、Event Engine、Choice System | 不依赖任何 LLM，用规则引擎跑通完整五阶段流程 | `v0.3.0` |
 | **3** | Agent：AgentCore Runtime、GameMaster、工具、Memory | Gateway 工具调用能**经校验**变更状态，并有审计轨迹 | `v0.4.0` |
 | **4** | 前端：首页、患者创建、游戏界面、状态面板、AI 对话 | 五个页面全部接真实 API | `v0.5.0` |
 | **5** | 部署收尾：bootstrap 校验、部署、演示脚本 | 按 README 冷启动可完整跑通 5 分钟 Demo | `v1.0.0` |
@@ -60,22 +60,34 @@ GDD 原定的 Phase 1（初始化 React、初始化 CDK、创建 AWS 资源、�
 
 ---
 
-## Phase 2 — 游戏核心
+## Phase 2 — 游戏核心 ✅ 已完成
 
 **目标**：**完全不依赖 LLM**，用规则引擎跑通完整五阶段流程。
 
-**范围**
+**交付物**
 
-- `PatientState` 演进逻辑（健康维度 0–100 边界强制）
-- Event Engine：按阶段生成事件，事件池由数据驱动
-- Choice System：玩家选择 → 计算 `impact` → 更新状态 → 追加 `EventHistory`
-- 乐观锁 `version` 的实际启用（`ConditionExpression`）
-- 单测覆盖：边界校验、版本冲突、事件顺序（时间戳定宽格式）
-- 前端的 API 调用雏形（已知晓 API 地址即可）
+- `domain/engine.ts`：纯函数规则引擎（事件选择、选择应用、阶段推进），不 import 任何 AWS SDK
+- `domain/health.ts`：`clampHealth`（游戏内截断）与 `applyValidatedDelta`（外部提议拒绝）两种语义
+- `content/`：3 个合成病例模板 + 13 个事件（覆盖五阶段）
+- `repo.ts`：四项原子 `TransactWrite`（双乐观锁 + 幂等条件）
+- 7 条路由从 501 桩变为真实实现
+- CloudFront 新增 `/api/*` behavior 反代 API Gateway
+- 79 条单元测试；`scripts/smoke.sh` + `scripts/game-loop-check.py` 端到端冒烟
 
-**退出标准**：一条脚本可在无 LLM 情况下从预防阶段走到康复阶段，状态与事件历史正确落库
+**退出标准**
 
-**明确不做**：任何 Agent / Bedrock 调用
+- [x] 一条脚本可在无 LLM 情况下从预防阶段走到康复阶段
+- [x] 状态与事件历史正确落库（含稀疏索引写入正确性）
+- [x] 重复提交被幂等条件拒绝（409）
+- [x] 未答完当前阶段时拒绝推进（409）
+- [x] 经 CloudFront 的 `/api/v1/health` 返回 200
+
+**明确不做**：任何 Agent / Bedrock 调用 —— 已遵守
+
+**过程中修复的两个真实缺陷**（均由端到端测试发现，单元测试未覆盖）
+
+1. `stageEventIndex` 语义不一致导致「答一题就跳过整个阶段」——现在由 `session-lifecycle.test.ts` 守护
+2. `advanceStageTransaction` 把**推进前**的阶段写回数据库，导致会话在两个阶段间死循环——现在由 `transaction-expressions.test.ts` 守护
 
 ---
 
@@ -89,15 +101,18 @@ GDD 原定的 Phase 1（初始化 React、初始化 CDK、创建 AWS 资源、�
 - GameMaster Agent（Python，`BedrockAgentCoreApp`）
 - AgentCore Gateway + Lambda 工具目标（`get_patient_state` 等）
 - AgentCore Memory（`USER_PREFERENCE` + `SEMANTIC` 策略，`actorId = playerId`）
-- 后端校验 Lambda：边界校验、阶段合法性、内容安全过滤
+- **可插拔 ModelProvider**：`BedrockProvider` / `ExternalApiProvider` 两种实现
+- 复用 Phase 2 已实现的 `applyValidatedDelta()` 做外部提议的边界校验（它目前尚无调用方）
 - **审计轨迹**：每次 Agent 发起的状态变更都记录来源与理由
 
-**前置条件（阻塞项）**
+**前置条件（阻塞项，按优先级）**
 
-- [ ] **提交 Anthropic 模型访问用例申报表单**（账号级 + 区域级，非 IAM 权限，需提前数周）
-- [ ] 补齐 Bedrock / AgentCore IAM 权限，见 [IAM-PERMISSIONS.md](IAM-PERMISSIONS.md) §B
-- [ ] 用 `aws bedrock list-foundation-models` 现场核实模型 ID，**不要照抄文档中的示例字符串**
-- [ ] 确认 `policy/*` 构造在稳定模块中的可用性
+- [ ] 🔴 **提 bedrock-allowlisting 工单** —— 本轮实测确认账号被此门槛阻断，**任何 IAM 策略都无法绕过**。
+      实测报错见 [ARCHITECTURE.md](ARCHITECTURE.md) §6.3。这是唯一写代码解决不了的问题，应最先启动。
+- [ ] 🔴 **补齐 `bedrock-agentcore:*` IAM 权限** —— 当前实测 `implicitDeny`，见 [IAM-PERMISSIONS.md](IAM-PERMISSIONS.md) §B
+- [ ] 🟡 确认模型选择：`deepseek.v3.2`（Bedrock，已实测存在且为 `ON_DEMAND`）或直连 DeepSeek 官方 API。
+      Phase 3 已设计为**可插拔 provider**，两条路都保留 —— 见 [ARCHITECTURE.md](ARCHITECTURE.md) §6.6
+- [ ] 🟡 确认 `policy/*` 构造在稳定模块中的可用性（正式模块 vs alpha 包存在冲突）
 
 **退出标准**：一次 Gateway 工具调用能经后端校验后变更状态，并留下可追溯的审计记录
 

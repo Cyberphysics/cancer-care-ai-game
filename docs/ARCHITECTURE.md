@@ -87,9 +87,7 @@
 
 跨栈引用**直接传递 construct**（`{ table: dataStack.table }`），而非经 `CfnOutput` / `Fn.importValue` 往返。本项目的 `cdk.json` 已启用 `@aws-cdk/core:defaultCrossStackReferences: "weak"`，因此不会为跨栈引用生成 CloudFormation Export，也就不会出现「export 被占用导致无法改名/删除」的经典问题。
 
-### 3.3 请求链路：提交一次玩家选择
-
-Phase 2 实现后的目标链路（当前返回 501）：
+### 3.3 请求链路：提交一次玩家选择（Phase 2 已实现）
 
 ```
 玩家点击选项
@@ -100,19 +98,37 @@ Phase 2 实现后的目标链路（当前返回 501）：
    │
    ├─► Lambda 解包（rawPath / method）→ router.ts 分发
    │
-   ├─► 读取当前 PatientState + version
+   ├─► 读取 GameSession（校验 status、activeEventSk、version）
+   ├─► 按 activeEventSk 读取活跃事件，校验 eventId 匹配
+   ├─► 读取 PatientState（拿 health、version）
    │
-   ├─► 计算 impact，做 0–100 边界校验
+   ├─► domain/engine.applyChoice()  ← 纯函数，无 I/O
+   │        └─ clampHealth 计算新健康值 + 推导下一事件
    │
-   ├─► UpdateItem + ConditionExpression(version = :expected)
-   │        └─ 冲突 → 409，调用方重读
+   ├─► **一次 TransactWrite 原子提交 4 项**
+   │     ├─ 患者   条件 version = :expected
+   │     ├─ 事件   条件 attribute_not_exists(chosenChoiceId)
+   │     ├─ 下一事件 条件 attribute_not_exists(PK)
+   │     └─ 会话   条件 version = :expected
+   │        └─ 冲突 → TransactionCanceledException → 409，调用方重读
    │
-   ├─► PutItem 写入 EventHistory（SK = EVENT#<iso8601>#<eventId>）
-   │
-   └─► 返回更新后的状态与下一事件
+   └─► 返回更新后的状态、impact、rationale 与下一事件
 ```
 
-Phase 3 会在「计算 impact」这一步插入 AgentCore——见第 5 节。
+细节见 [GAME-RULES.md](GAME-RULES.md) §5 与 [DATA-MODEL.md](DATA-MODEL.md) §9。
+
+Phase 3 会在「applyChoice」这一步旁路插入 AgentCore 生成内容——见第 5 节。
+
+### 3.4 为什么前端用相对路径调用 API
+
+CloudFront 上有一条 `/api/*` behavior 反向代理到 API Gateway。这带来四个具体收益：
+
+1. **无需把 API 地址烘焙进前端构建产物**，因此没有「先部署 API 还是先构建前端」的顺序约束
+2. **完全不涉及 CORS**——浏览器看到的是同源请求
+3. 演示只需要一个 URL
+4. 本地开发走 Vite 的同名代理，线上走 CloudFront，**同一份前端代码**
+
+代价是必须正确配置 `OriginRequestPolicy.ALL_VIEWER_EXCEPT_HOST_HEADER`：CloudFront 必须以 **API Gateway 的域名**作为 `Host` 头，转发 viewer 的 Host 会让 API Gateway 以 403 拒绝。这是该模式最经典的坑，已在 `frontend-stack.test.ts` 与冒烟脚本中各有一处断言。
 
 ---
 
@@ -325,32 +341,98 @@ runtime.addEndpoint('live');
 
 ---
 
-## 6. ⚠️ Bedrock 模型访问（Phase 3 阻塞项）
+## 6. Phase 3 的模型选择
 
-**关键认知：Anthropic 模型在 Bedrock 上的访问权不是 IAM 权限。**
+> 本节全部结论来自**对本账号的实测**与官方资料核实，不是推测。测试日期 2026-10-15。
 
-它是**账号级 + 区域级**的授权，通过 Bedrock 控制台的 Model access 用例申报表单开通，
-**任何 IAM 策略都无法替代**，且审批需要时间。
+### 6.1 先回答三个常见误解
 
-> **因此：应在 Phase 3 开始前数周就提交 Anthropic 用例申报表单。**
->
-> 典型症状：`bedrock:ListFoundationModels` 因 IAM 允许而成功，但 `InvokeModel` 返回
-> `AccessDeniedException: model access not granted`——这正是申报表单未提交的表现。
+| 问题 | 结论 |
+|---|---|
+| Bedrock 能中转我自己的 DeepSeek API key 吗？ | **不能。** Bedrock 是模型托管服务，只运行 AWS 侧托管的模型，认证模型是 SigV4/IAM。不存在「自带外部 API key」这种模式。 |
+| DeepSeek 在 Bedrock 上吗？ | **在**，而且是全托管 serverless（不是需要预置 GPU 端点的 Marketplace 版本）。见 6.2。 |
+| AgentCore Runtime 只能用 Bedrock 模型吗？ | **不是。** AWS 明确声明 AgentCore 是模型无关的，可用 Bedrock 生态之外的模型。见 6.4。 |
 
-此外，当前 Claude 模型在 Bedrock 上普遍要求**跨区域推理（cross-region inference）**，
-模型 ID 形如 `us.anthropic.claude-<name>-<version>`，`us.` 前缀锁定美国区域。
+### 6.2 Bedrock 上的可用模型（us-east-1 实测）
 
-> ⚠️ **这些 ID 字符串来自搜索摘要而非官方页面直读，本项目中未经验证。**
-> Phase 3 硬编码之前，必须先执行：
->
-> ```bash
-> aws bedrock list-foundation-models --region us-east-1 --profile cancercare-game-mvp
-> aws bedrock list-inference-profiles --region us-east-1 --profile cancercare-game-mvp
-> ```
->
-> 另一个常见陷阱：跨区域推理配置文件调用 `InvokeModel` 需要在**推理配置文件 ARN**
-> 与**其路由到的每个区域的底层基础模型 ARN** 上都获得授权。这是「IAM 策略看起来完全
-> 正确却仍然 AccessDenied」的最常见原因。
+```
+DeepSeek   deepseek.v3.2        ON_DEMAND        ACTIVE   ← 可直接 InvokeModel，无需推理配置文件
+DeepSeek   deepseek.r1-v1:0     需 us. 前缀的推理配置文件
+Anthropic  anthropic.claude-*   全部为 INFERENCE_PROFILE 类型（必须走跨区域配置文件）
+```
+
+值得注意的是 `deepseek.v3.2` 是 **`ON_DEMAND`** 类型——比 Claude 那条路简单，不需要
+跨区域推理配置文件，也就没有「配置文件 ARN + 各路由区域基础模型 ARN 双重授权」的陷阱。
+
+### 6.3 ⚠️ 本账号当前被 allowlisting 阻断（Phase 3 的头号阻塞项）
+
+实测调用 `deepseek.v3.2` 返回：
+
+```
+To access Amazon Bedrock, you must provide further information so we can verify
+you are a corporate customer and that we can grant you access given applicable
+law and internal policy. Please submit a request here:
+  https://support.console.aws.amazon.com/support/home#/case/create?...bedrock-allowlisting
+```
+
+**这是账号级的门槛，不是 IAM 问题。** 实测中 `bedrock:ListFoundationModels` 与
+`bedrock:InvokeModel` 在 IAM 模拟中均为 `allowed`，但真实调用依然被拒。
+
+这恰好印证了一直以来的判断：**模型访问是账号级授权，IAM 无法替代。**
+
+> **行动项：Phase 3 动工前先提 bedrock-allowlisting 工单。** 这是唯一无法靠写代码绕过的阻塞项。
+
+### 6.4 AgentCore Runtime 是模型无关的
+
+AgentCore Runtime 只是运行你的 ARM64 容器/zip，不介入模型选择。因此：
+
+- **PUBLIC 网络模式（默认）**：运行时可直接出网访问 `api.deepseek.com` 等外部端点
+- **VPC 模式**：需私有子网 + NAT 网关才有出网能力（公有子网不行，这是常见误解）
+
+### 6.5 存第三方 API key 的正确姿势
+
+若选择直连 DeepSeek 官方 API，**不要用环境变量存 key**。AgentCore Identity 有专门为此设计的
+**API key credential provider**：KMS 加密存储、按 workload identity 授权、CloudTrail 可审计，
+且支持引用你已有的 Secrets Manager 密钥。
+
+```bash
+aws bedrock-agentcore-control create-api-key-credential-provider \
+  --name deepseek-apikey --api-key "$DEEPSEEK_API_KEY" --region us-east-1
+```
+
+（注意该服务属于 `bedrock-agentcore:*`，本账号目前同样无权访问——见 [IAM-PERMISSIONS.md](IAM-PERMISSIONS.md) §B。）
+
+### 6.6 设计决定：可插拔的模型 provider
+
+三种路径各有取舍：
+
+| 路径 | 优点 | 缺点 |
+|---|---|---|
+| **A. Bedrock 上的 `deepseek.v3.2`** | AWS 原生、IAM 鉴权、无需管理 key、数据不出 AWS 边界 | **当前被 allowlisting 阻断**；需等工单 |
+| **B. 直连 DeepSeek 官方 API** | 立刻可用；DeepSeek 官方定价更低 | 需要管理 key；提示词离开 AWS 边界（本项目仅合成病例，无合规问题，但失去了「数据未出 AWS」的叙事） |
+| **C. Bedrock 上的 Claude** | 能力最强 | 同样被 allowlisting 阻断，且必须走跨区域推理配置文件 |
+
+**因此 Phase 3 把模型调用抽象为 provider 接口，两种实现并存**，由配置选择：
+
+```ts
+interface ModelProvider {
+  complete(prompt: ModelPrompt): Promise<ModelCompletion>;
+}
+// BedrockProvider      — IAM 鉴权，走 deepseek.v3.2 或 us.anthropic.*
+// ExternalApiProvider  — key 来自 AgentCore Identity credential provider
+```
+
+这样**不必在 allowlisting 工单通过前做不可逆的选择**，也不会因为选了其中一条而把另一条路堵死。
+对本文档的读者而言，这也展示了一个更普遍的工程判断：**把一个受外部审批阻塞的依赖隔离在接口之后。**
+
+### 6.7 ⚠️ 仍待证实的部分
+
+- Phase 3 硬编码模型 ID 前，仍应现场核实（虽然本轮已实测 `deepseek.v3.2` 存在）：
+  ```bash
+  aws bedrock list-foundation-models --region us-east-1 --profile cancercare-game-mvp
+  ```
+- `InvokeAgentRuntime` 的资源 ARN 格式尚未证实，故 [IAM-PERMISSIONS.md](IAM-PERMISSIONS.md) §B 中该动作仍用 `Resource: "*"`
+- AgentCore Identity 相关 API 本账号无权调用，未能实测
 
 ---
 

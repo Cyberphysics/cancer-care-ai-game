@@ -22,7 +22,12 @@ const api = new ApiStack(app, stackName(config.stackPrefix, 'Api'), {
   table: data.table,
 });
 
-new FrontendStack(app, stackName(config.stackPrefix, 'Frontend'), { env, config });
+new FrontendStack(app, stackName(config.stackPrefix, 'Frontend'), {
+  env,
+  config,
+  // Frontend proxies /api/* to the API, so it depends on the Api stack.
+  apiDomainName: api.apiDomainName,
+});
 
 // Applied to every stack. Beyond tidiness this is how cost allocation reports
 // prove which resources belong to this project — the account also hosts

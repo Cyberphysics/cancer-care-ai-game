@@ -2,7 +2,8 @@ import type { ApiErrorBody, ApiResponse } from './types';
 
 const JSON_HEADERS = {
   'content-type': 'application/json; charset=utf-8',
-  // Phase 2 replaces this with the CloudFront distribution domain.
+  // Phase 3 replaces this with the CloudFront distribution domain. Left open
+  // while the API has no authentication — see README "已知限制".
   'access-control-allow-origin': '*',
 } as const;
 
@@ -18,27 +19,41 @@ export function ok(payload: unknown): ApiResponse {
   return json(200, payload);
 }
 
+export function created(payload: unknown): ApiResponse {
+  return json(201, payload);
+}
+
+function errorResponse(
+  statusCode: number,
+  code: string,
+  message: string,
+  details?: unknown,
+): ApiResponse {
+  const body: ApiErrorBody = {
+    error: { code, message, ...(details === undefined ? {} : { details }) },
+  };
+  return json(statusCode, body);
+}
+
+export function badRequest(message: string, details?: unknown): ApiResponse {
+  return errorResponse(400, 'BAD_REQUEST', message, details);
+}
+
 export function notFound(message: string): ApiResponse {
-  const body: ApiErrorBody = { error: { code: 'NOT_FOUND', message } };
-  return json(404, body);
+  return errorResponse(404, 'NOT_FOUND', message);
 }
 
 /**
- * Standard response for a route that is defined but not implemented yet.
+ * A write lost a race, or an idempotency guard rejected a repeat submission.
  *
- * Returning 501 rather than fabricated 200 data is deliberate: a stub can never
- * be mistaken for a working feature during a demo, and the smoke test can assert
- * on it.
+ * The client's correct response is to re-read the current state and retry —
+ * which is why this is a 409 and not a 500. See docs/DATA-MODEL.md §9.
  */
-export function notImplemented(route: string, phase: number, message: string): ApiResponse {
-  const body: ApiErrorBody = {
-    error: { code: 'NOT_IMPLEMENTED', message, phase, route },
-  };
-  return json(501, body);
+export function conflict(message: string, details?: unknown): ApiResponse {
+  return errorResponse(409, 'CONFLICT', message, details);
 }
 
 export function serverError(err: unknown): ApiResponse {
   const message = err instanceof Error ? err.message : String(err);
-  const body: ApiErrorBody = { error: { code: 'INTERNAL_ERROR', message } };
-  return json(500, body);
+  return errorResponse(500, 'INTERNAL_ERROR', message);
 }

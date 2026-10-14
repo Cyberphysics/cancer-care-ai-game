@@ -83,6 +83,59 @@ body {
   border: 1px solid rgba(240, 179, 74, 0.4);
 }
 
+.badge-ok {
+  background: rgba(79, 209, 165, 0.16);
+  color: var(--accent);
+  border: 1px solid rgba(79, 209, 165, 0.4);
+}
+
+.badge-err {
+  background: rgba(240, 100, 100, 0.16);
+  color: #f08a8a;
+  border: 1px solid rgba(240, 100, 100, 0.4);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 0.9rem 1.5rem;
+  margin: 1rem 0 0;
+}
+
+.facts div {
+  min-width: 0;
+}
+
+.facts dt {
+  color: var(--muted);
+  font-size: 0.78rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.facts dd {
+  margin: 0.15rem 0 0;
+  font-size: 0.95rem;
+  overflow-wrap: anywhere;
+}
+
+.mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.85rem;
+}
+
+.small {
+  font-size: 0.85rem;
+}
+
+code {
+  background: rgba(255, 255, 255, 0.06);
+  border-radius: 4px;
+  padding: 0.05rem 0.3rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 0.88em;
+}
+
 .muted {
   color: var(--muted);
   margin: 0.75rem 0 0;

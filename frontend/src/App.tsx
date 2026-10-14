@@ -1,11 +1,104 @@
+import { useEffect, useState } from 'react';
+import { ApiError, getHealth, type HealthResponse } from './api/client';
 import { GAME_STAGES } from './data/stages';
 
+type ApiState =
+  | { readonly kind: 'loading' }
+  | { readonly kind: 'ok'; readonly data: HealthResponse }
+  | { readonly kind: 'error'; readonly message: string; readonly status?: number };
+
 /**
- * Phase 0 placeholder screen.
+ * Phase 2 screen.
  *
- * It exists to prove the delivery path — Vite build → S3 → CloudFront — not to
- * play the game. Everything below is static presentation.
+ * Still not a game UI — that is Phase 4. What this does prove is the full
+ * delivery path in one page load: CloudFront → (proxied) API Gateway → Lambda →
+ * DynamoDB. If the connectivity card is green, the whole chain is live.
  */
+function useApiHealth(): ApiState {
+  const [state, setState] = useState<ApiState>({ kind: 'loading' });
+
+  useEffect(() => {
+    const controller = new AbortController();
+
+    getHealth(controller.signal)
+      .then((data) => setState({ kind: 'ok', data }))
+      .catch((err: unknown) => {
+        if (controller.signal.aborted) return;
+        if (err instanceof ApiError) {
+          setState({ kind: 'error', message: err.message, status: err.status });
+        } else {
+          setState({ kind: 'error', message: err instanceof Error ? err.message : String(err) });
+        }
+      });
+
+    return () => controller.abort();
+  }, []);
+
+  return state;
+}
+
+function ConnectivityCard() {
+  const state = useApiHealth();
+
+  if (state.kind === 'loading') {
+    return (
+      <section className="card">
+        <h2>API 连通性</h2>
+        <p className="muted">正在连接 API…</p>
+      </section>
+    );
+  }
+
+  if (state.kind === 'error') {
+    return (
+      <section className="card boundary">
+        <h2>API 连通性</h2>
+        <div className="status-row">
+          <span className="badge badge-err">连接失败</span>
+          {state.status !== undefined && <span className="muted">HTTP {state.status}</span>}
+        </div>
+        <p className="muted">{state.message}</p>
+        <p className="muted">
+          若本地开发时看到此项失败，请确认已在 <code>frontend/.env.local</code> 中设置
+          <code> VITE_API_PROXY_TARGET</code>。
+        </p>
+      </section>
+    );
+  }
+
+  const { data } = state;
+  return (
+    <section className="card">
+      <h2>API 连通性</h2>
+      <div className="status-row">
+        <span className="badge badge-ok">连接正常</span>
+        <span className="muted">{data.description}</span>
+      </div>
+      <dl className="facts">
+        <div>
+          <dt>阶段</dt>
+          <dd>
+            Phase {data.phase} · {data.stage}
+          </dd>
+        </div>
+        <div>
+          <dt>区域</dt>
+          <dd>{data.region}</dd>
+        </div>
+        <div>
+          <dt>DynamoDB 表</dt>
+          <dd className="mono">{data.tableName}</dd>
+        </div>
+        <div>
+          <dt>事件池</dt>
+          <dd>{data.catalogEvents} 个事件</dd>
+        </div>
+      </dl>
+      <p className="muted small">{data.disclaimer}</p>
+    </section>
+  );
+}
+
 export default function App() {
   return (
     <div className="page">
@@ -17,14 +110,16 @@ export default function App() {
 
       <section className="card status">
         <div className="status-row">
-          <span className="badge badge-warn">Phase 0</span>
-          <span>项目骨架 — 尚无游戏逻辑，尚无 Agent</span>
+          <span className="badge badge-warn">Phase 2</span>
+          <span>规则引擎驱动的照护模拟 — 游戏界面待 Phase 4</span>
         </div>
         <p className="muted">
-          当前版本仅打通「前端构建 → S3 → CloudFront」与「API Gateway → Lambda → DynamoDB」两条链路。
-          五阶段照护循环、事件引擎与 AgentCore 集成将分别在 Phase 2 / Phase 3 落地。
+          五阶段照护循环已由规则引擎实现，且<strong>完全不依赖 LLM</strong>。Agent 与长期记忆将在
+          Phase 3 引入。
         </p>
       </section>
+
+      <ConnectivityCard />
 
       <section className="card">
         <h2>照护生命周期</h2>
@@ -52,7 +147,7 @@ export default function App() {
       </section>
 
       <footer className="footer">
-        <span>Phase 0 skeleton · v0.1.0</span>
+        <span>Phase 2 · v0.3.0</span>
       </footer>
     </div>
   );

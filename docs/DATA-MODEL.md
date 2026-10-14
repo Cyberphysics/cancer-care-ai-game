@@ -113,8 +113,11 @@ const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
 | `patientId` | S | 本会话的合成患者 |
 | `currentStage` | S | `prevention` \| `screening` \| `diagnosis` \| `treatment` \| `recovery` |
 | `stageIndex` | N | 0–4，便于排序与比较 |
+| `stageEventIndex` | N | **当前活跃事件**在阶段事件池中的下标（不是已消费数量）。见 [GAME-RULES.md](GAME-RULES.md) §2 |
+| `activeEventSk` | S? | 待作答事件的完整 SK，使选择提交走一次 GetItem 而非 Query。阶段池耗尽时该属性被 **REMOVE** |
+| `awaitingAdvance` | B | 阶段事件已耗尽，等待玩家显式推进 |
 | `score` | N | 累积得分 |
-| `qol` | N | 当前生活质量 |
+| `qol` | N | 当前生活质量（镜像 `patient.health.qualityOfLife`，使列表查询无需二次读取） |
 | `status` | S | `active` \| `completed` \| `abandoned` |
 | `startedAt` | S | ISO-8601 UTC |
 | `completedAt` | S? | ISO-8601 UTC |
@@ -142,10 +145,11 @@ const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
 | `stage` | S | 所属阶段 |
 | `type` | S | `medical` \| `care` \| `emotion` |
 | `title` / `description` | S | 展示文案 |
-| `choices` | L | `[{ id, text }]` |
-| `chosenChoiceId` | S? | 玩家选择 |
-| `impact` | M | 对 `qualityOfLife` / `energy` / `stress` / `nutrition` 的增量 |
-| `agentRationale` | S? | Agent 给出的解释（Phase 3） |
+| `choices` | L | `[{ id, text }]`，**不含** impact/score |
+| `choiceOutcomes` | M | 各选项的影响，键为 choice id：`{ impact, score, rationale }`。**绝不出现在未作答事件的 API 响应中** |
+| `chosenChoiceId` | S? | 玩家选择；同时是防重复提交的条件键 |
+| `impact` | M? | 实际施加的增量（作答后写入） |
+| `agentRationale` | S? | 展示给玩家的解释（Phase 2 来自模板，Phase 3 可由 Agent 生成） |
 | `source` | S | `rule`（Phase 2 规则引擎）\| `agent`（Phase 3） |
 | `timestamp` | S | ISO-8601 UTC |
 
@@ -155,54 +159,70 @@ const docClient = DynamoDBDocumentClient.from(new DynamoDBClient({}), {
 
 设计已支撑的查询。**全部走 GetItem / Query，无 Scan。**
 
-| # | 场景 | 操作 |
-|---|---|---|
-| 1 | 读取玩家 | `GetItem` PK=`PLAYER#<pid>`，SK=`PROFILE` |
-| 2 | 写入/更新玩家 | `PutItem` |
-| 3 | 列出某玩家的所有会话 | `Query` PK=`PLAYER#<pid>`, `begins_with(SK,'SESSION#')` ⚠️ 见下 |
-| 4 | 按 sessionId 读取会话 | `GetItem` PK=`SESSION#<sid>`, SK=`META` |
-| 5 | 列出某玩家的所有会话（走索引） | `Query` GSI1, GSI1PK=`PLAYER#<pid>` |
-| 6 | 读取患者状态 | `GetItem` PK=`SESSION#<sid>`, SK=`PATIENT#<patid>` |
-| 7 | **加载游戏界面**（患者状态 + 最近事件） | **一次** `Query` PK=`SESSION#<sid>`, `ScanIndexForward:false`, `Limit:20` |
-| 8 | 完整事件时间线（正序） | `Query` PK=`SESSION#<sid>`, `begins_with(SK,'EVENT#')`, `ScanIndexForward:true` |
-| 9 | 追加事件 | `PutItem` + `attribute_not_exists(PK)` |
-| 10 | 受校验的状态更新 | `UpdateItem` + `version` 条件，见第 9 节 |
+| # | 场景 | 操作 | 实现位置 |
+|---|---|---|---|
+| 1 | 读取玩家 | `GetItem` PK=`PLAYER#<pid>`, SK=`PROFILE` | `repo.getPlayer` |
+| 2 | 写入玩家 | `PutItem` + `attribute_not_exists(PK)` | `repo.putPlayer` |
+| 3 | 按 sessionId 读取会话 | `GetItem` PK=`SESSION#<sid>`, SK=`META` | `repo.getSession` |
+| 4 | **列出某玩家的所有会话** | `Query` GSI1, GSI1PK=`PLAYER#<pid>` | 待 Phase 4 使用 |
+| 5 | 读取患者状态 | `GetItem` PK=`SESSION#<sid>`, SK=`PATIENT#<patid>` | `repo.getItemAt` |
+| 6 | **加载游戏界面** | 上述两次 GetItem（会话 + 患者），加上按 `activeEventSk` 的第三次 GetItem 取当前事件 | `handlers.handleGetSession` |
+| 7 | 按 activeEventSk 读取当前事件 | `GetItem` PK=`SESSION#<sid>`, SK=`<activeEventSk>` | 同上 |
+| 8 | 完整事件时间线（正序） | `Query` PK=`SESSION#<sid>`, `begins_with(SK,'EVENT#')`, `ScanIndexForward:true` | `repo.listEvents` |
+| 9 | 创建会话 + 患者 + 首个事件 | `TransactWrite` 三项 | `repo.createSessionTransaction` |
+| 10 | 提交选择（4 项原子） | `TransactWrite` 四项 + 双乐观锁 + 幂等条件 | `repo.submitChoiceTransaction` |
+| 11 | 推进阶段 | `TransactWrite` 会话 + 患者时间线（+ 可选下一事件） | `repo.advanceStageTransaction` |
 
-> ⚠️ **第 3 行与第 4 行不兼容**：游戏中 GameSession 的 PK 是 `SESSION#<sid>`，不在
-> player 分区下，因此 `begins_with(SK,'SESSION#')` 查不到任何东西。**「列出某玩家的会话」
-> 一律走 GSI1（第 5 行）**，第 3 行仅在早期草案中存在，保留在此以说明取舍。
-> 实现时请勿使用第 3 行。
+**全部操作走 GetItem / Query / TransactWrite，无 Scan。**
+
+> **一个被推翻的早期设想**：草案里曾让 GameSession 的 PK 为 `PLAYER#<pid>`，用
+> `begins_with(SK,'SESSION#')` 列出玩家的会话。最终选择以 `SESSION#<sid>` 为分区键，
+> 因为游戏循环以会话为中心——代价是「列出某玩家的会话」必须走 GSI1（第 4 行），
+> 而收益是「加载游戏界面」的会话与患者状态落在同一分区。后者是高频路径，前者是低频的。
+
+---
+
+## 8.1 为什么不用 Query 找「当前事件」
+
+最直接的实现是 `Query PK=SESSION#<sid>` 取回分区内所有条目再筛出未作答的事件。但那样每次提交选择都要读回整个会话的事件历史——随着剧情推进线性变差。
+
+改为在会话条目上维护 `activeEventSk` 指针，使读取退化为一次 `GetItem`。代价是每次推进都要更新这个指针（在同一个事务里完成），以及阶段耗尽时必须 **REMOVE** 它——指针若悬停在已作答的事件上，下一次提交就会打错目标。
 
 ---
 
 ## 9. 乐观锁：Agent 不能直接改状态
 
-GDD §17 原则 5 要求「Agent 不能直接修改关键状态，必须经过后端校验」。落地机制就是**版本号乐观锁**：
+GDD §17 原则 5 要求「Agent 不能直接修改关键状态，必须经过后端校验」。
 
-```ts
-await docClient.update({
-  TableName: tableName,
-  Key: { PK: `SESSION#${sessionId}`, SK: `PATIENT#${patientId}` },
-  UpdateExpression: 'SET #health = :health, #v = #v + :one, updatedAt = :now',
-  ConditionExpression: '#v = :expected',
-  ExpressionAttributeNames: { '#health': 'health', '#v': 'version' },
-  ExpressionAttributeValues: {
-    ':health': validatedHealth,   // 后端已做 0–100 边界校验
-    ':expected': expectedVersion,
-    ':one': 1,
-    ':now': nowIso(),
-  },
-});
-```
+**Phase 2 已实现**（Phase 0 只是设计）。落地机制是 `repo.submitChoiceTransaction()` 里的**一次四项原子事务**：
 
-要点：
+| # | 项 | 条件 |
+|---|---|---|
+| 0 | `Update` 患者状态（新健康值） | `version = :expected` |
+| 1 | `Update` 已作答事件（写 chosenChoiceId / impact / rationale） | `attribute_not_exists(chosenChoiceId)` |
+| 2 | `Update` 会话（score / stageEventIndex / awaitingAdvance / activeEventSk） | `version = :expected` |
+| 3 | `Put` 下一事件 | `attribute_not_exists(PK)` |
 
-- Agent 提出的状态变更**先经后端校验**（`stress` / `nutrition` / `qualityOfLife` 等强制落在 0–100）
-- 校验通过后由后端执行带 `ConditionExpression` 的写入
-- 版本冲突时抛 `ConditionalCheckFailedException`，调用方需重新读取再试
-- **Agent 的执行角色不持有任何 DynamoDB 权限**——它只能调用工具，工具再经后端
+**两个乐观锁而非一个**：会话与患者是各自独立可变的实体。只锁其中一个，并发写入仍能从另一个溜过去。
 
-这条不变量写进了 [ARCHITECTURE.md](ARCHITECTURE.md)，是 Phase 3 的核心安全设计。
+**幂等由条件写免费获得**：`attribute_not_exists(chosenChoiceId)` 让重复提交同一选择直接失败，不需要单独的幂等键或去重表。
+
+### 事务失败的处理
+
+`TransactionCanceledException` 的 `CancellationReasons` 是一个**按位置对应 TransactItems 的数组**——索引 N 描述第 N 项。一次冲突可能同时触发多个条件，因此解析时要把全部原因收集起来，不要假设只有一项失败。`repo.sendTransaction` 会把它转成 `TransactionConflictError`，路由层映射为 **409**，客户端应重新读取状态后重试。
+
+### 关于健康值的两种语义
+
+边界校验有两套语义，**不要混用**：
+
+| 场景 | 函数 | 行为 |
+|---|---|---|
+| 规则引擎内部计算 impact | `clampHealth()` | 截断到 0–100，永不失败 |
+| 外部（Phase 3 Agent）提议的变更 | `applyValidatedDelta()` | 越界即拒绝，抛 `HealthValidationError` |
+
+Phase 3 的 Agent 工具调用必须走后者：静默把 +150 截断成 +100，会让调用方以为自己的状态判断成立。详见 [GAME-RULES.md](GAME-RULES.md) §1。
+
+**Agent 的执行角色不持有任何 DynamoDB 权限**——它只能调用工具，工具再经后端写入。这条不变量写进了 [ARCHITECTURE.md](ARCHITECTURE.md)，是 Phase 3 的核心安全设计。
 
 ---
 

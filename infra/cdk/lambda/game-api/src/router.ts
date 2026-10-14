@@ -1,48 +1,64 @@
-import { notFound, notImplemented, ok, serverError } from './responses';
+import {
+  AlreadyAnsweredError,
+  ChoiceNotFoundError,
+  StageStateError,
+} from './domain/engine';
+import { HealthValidationError } from './domain/health';
+import {
+  handleAdvance,
+  handleCreatePlayer,
+  handleCreateSession,
+  handleGetPlayer,
+  handleGetSession,
+  handleHealth,
+  handleListEvents,
+  handleSubmitChoice,
+} from './handlers';
+import {
+  ConditionalCheckError,
+  TransactionConflictError,
+} from './repo';
+import { badRequest, conflict, notFound, serverError } from './responses';
 import type { ApiResponse, HttpApiEvent } from './types';
 
 /**
  * Route table.
  *
- * This mirrors the routes declared on the HTTP API in `lib/api-stack.ts`. The
- * Lambda re-dispatches rather than trusting the gateway because the integration
- * is a plain proxy — and because Phase 3 will invoke this same dispatch path
- * from the AgentCore Gateway tool surface.
- *
- * Every route except `/health` is intentionally a 501 stub. Phase 0 ships the
- * contract and the wiring, not the game.
+ * Mirrors the routes declared on the HTTP API in `lib/api-stack.ts`. Dispatch
+ * happens here rather than in the gateway so Phase 3 can reuse the same entry
+ * points from the AgentCore Gateway tool surface.
  */
 interface RouteDefinition {
   readonly method: string;
-  /** Path template; `{name}` segments are captured into `params`. */
+  /** Path template; `{name}` segments are captured into `pathParameters`. */
   readonly pattern: string;
-  readonly phase: number;
-  readonly summary: string;
+  readonly handler: (event: HttpApiEvent) => Promise<ApiResponse>;
 }
 
 const ROUTES: readonly RouteDefinition[] = [
-  { method: 'GET', pattern: '/api/v1/health', phase: 0, summary: 'Liveness check' },
-  { method: 'POST', pattern: '/api/v1/players', phase: 2, summary: '创建玩家（家庭健康守护者）' },
-  { method: 'GET', pattern: '/api/v1/players/{playerId}', phase: 2, summary: '读取玩家档案' },
-  { method: 'POST', pattern: '/api/v1/sessions', phase: 2, summary: '创建患者并开始游戏' },
-  { method: 'GET', pattern: '/api/v1/sessions/{sessionId}', phase: 2, summary: '读取会话与患者状态' },
+  {
+    method: 'GET',
+    pattern: '/api/v1/health',
+    handler: () => handleHealth(),
+  },
+  { method: 'POST', pattern: '/api/v1/players', handler: handleCreatePlayer },
+  { method: 'GET', pattern: '/api/v1/players/{playerId}', handler: handleGetPlayer },
+  { method: 'POST', pattern: '/api/v1/sessions', handler: handleCreateSession },
+  { method: 'GET', pattern: '/api/v1/sessions/{sessionId}', handler: handleGetSession },
   {
     method: 'GET',
     pattern: '/api/v1/sessions/{sessionId}/events',
-    phase: 2,
-    summary: '事件时间线',
+    handler: handleListEvents,
   },
   {
     method: 'POST',
     pattern: '/api/v1/sessions/{sessionId}/choices',
-    phase: 2,
-    summary: '提交玩家选择（核心游戏循环）',
+    handler: handleSubmitChoice,
   },
   {
     method: 'POST',
     pattern: '/api/v1/sessions/{sessionId}/advance',
-    phase: 3,
-    summary: '推进阶段（Phase 3 由 AgentCore GameMaster 驱动）',
+    handler: handleAdvance,
   },
 ];
 
@@ -80,40 +96,44 @@ function match(method: string, path: string): MatchResult | undefined {
   return undefined;
 }
 
-function health(): ApiResponse {
-  return ok({
-    status: 'ok',
-    phase: 0,
-    description: 'Phase 0 骨架 — 路由与基础设施已就绪，游戏逻辑尚未实现',
-    stage: process.env.STAGE ?? 'unknown',
-    region: process.env.AWS_REGION ?? 'unknown',
-    tableName: process.env.TABLE_NAME ?? 'unset',
-    timestamp: new Date().toISOString(),
-  });
+/**
+ * Map a domain failure to a status code.
+ *
+ * The distinction that matters: a **conflict** means the request was well-formed
+ * but lost a race or repeated an action — the client should re-read and retry.
+ * A **bad request** means the request itself was wrong and retrying unchanged
+ * will fail again. Collapsing either into a 500 would tell the client nothing
+ * useful and hide real bugs.
+ */
+function mapError(err: unknown): ApiResponse | undefined {
+  if (err instanceof ChoiceNotFoundError) return badRequest(err.message);
+  if (err instanceof HealthValidationError) return badRequest(err.message);
+
+  if (err instanceof AlreadyAnsweredError) return conflict(err.message);
+  if (err instanceof StageStateError) return conflict(err.message);
+  if (err instanceof TransactionConflictError) {
+    return conflict(err.message, err.reasons);
+  }
+  if (err instanceof ConditionalCheckError) return conflict(err.message, err.reason);
+
+  return undefined;
 }
 
 export async function dispatch(event: HttpApiEvent): Promise<ApiResponse> {
-  try {
-    const method = event.requestContext.http.method;
-    const path = event.rawPath;
-    const found = match(method, path);
+  const method = event.requestContext.http.method;
+  const path = event.rawPath;
 
+  try {
+    const found = match(method, path);
     if (!found) {
       return notFound(`No route matches ${method} ${path}`);
     }
 
-    const { route } = found;
-
-    if (route.pattern === '/api/v1/health') {
-      return health();
-    }
-
-    return notImplemented(
-      `${route.method} ${route.pattern}`,
-      route.phase,
-      `${route.summary} — 计划在 Phase ${route.phase} 实现`,
-    );
+    const routed: HttpApiEvent = { ...event, pathParameters: found.params };
+    return await found.route.handler(routed);
   } catch (err) {
-    return serverError(err);
+    // A `TransactionCanceledException` reaches us as a client-caused conflict,
+    // so it is mapped before the generic 500 fallback.
+    return mapError(err) ?? serverError(err);
   }
 }

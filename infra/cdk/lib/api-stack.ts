@@ -30,6 +30,14 @@ export class ApiStack extends cdk.Stack {
   /** Full invoke URL, e.g. `https://abc123.execute-api.us-east-1.amazonaws.com`. */
   public readonly apiEndpoint: string;
 
+  /**
+   * Host only, no scheme — what a CloudFront origin needs.
+   *
+   * Derived from `apiId` rather than parsed out of `apiEndpoint`, so the value
+   * stays a plain CFN join instead of a token-splitting expression.
+   */
+  public readonly apiDomainName: string;
+
   constructor(scope: Construct, id: string, props: ApiStackProps) {
     super(scope, id, props);
 
@@ -64,6 +72,15 @@ export class ApiStack extends cdk.Stack {
         minify: true,
         sourceMap: true,
         target: 'node22',
+        // Bundle the AWS SDK rather than relying on the one baked into the
+        // Node 22 runtime. CDK externalises `@aws-sdk/*` by default, which
+        // leaves the function depending on whatever SDK version AWS happens to
+        // ship — and it is not documented that every package we use (notably
+        // `@aws-sdk/lib-dynamodb`) is present in the runtime at all. A missing
+        // package would surface as `MODULE_NOT_FOUND` on cold start and nothing
+        // sooner. Bundling trades a larger artifact for a pinned, verifiable
+        // dependency set.
+        externalModules: [],
       },
     });
 
@@ -112,6 +129,7 @@ export class ApiStack extends cdk.Stack {
     }
 
     this.apiEndpoint = api.apiEndpoint;
+    this.apiDomainName = `${api.apiId}.execute-api.${this.region}.amazonaws.com`;
 
     new cdk.CfnOutput(this, 'ApiBaseUrl', {
       value: api.apiEndpoint,
