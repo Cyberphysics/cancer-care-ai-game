@@ -90,6 +90,14 @@ export class FrontendStack extends cdk.Stack {
     // redundant OAC for the same bucket.
     const webOrigin = origins.S3BucketOrigin.withOriginAccessControl(this.webBucket);
 
+    // Behaviour note: because OAC + BlockPublicAccess grant no `s3:ListBucket`,
+    // S3 answers a request for a missing key with 403 AccessDenied rather than
+    // 404, and CloudFront passes that through. This is the expected outcome —
+    // the important property is that a missing asset is never masked as
+    // index.html with a 200 (see SPA_REWRITE_CODE above). Mapping 403 → 404
+    // would require shipping a separate error page via `ResponsePagePath`,
+    // which is not worth the extra moving parts at Phase 0.
+
     this.distribution = new cloudfront.Distribution(this, 'WebDistribution', {
       comment: `${config.appName} web client`,
       defaultRootObject: 'index.html',

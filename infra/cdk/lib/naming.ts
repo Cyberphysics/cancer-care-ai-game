@@ -34,7 +34,13 @@ export const DDB = {
   ttlAttribute: 'expiresAt',
 } as const;
 
-/** Logical tags applied to the DynamoDB table itself. */
+/**
+ * Logical tags applied to the DynamoDB table itself.
+ *
+ * AWS tag values accept only letters, digits, whitespace and `_ . : / = + - @`.
+ * Commas are rejected at deploy time with an opaque 400 from the DynamoDB
+ * control plane, so the entity list is space-separated.
+ */
 export const TABLE_TAGS = {
-  EntityTypes: 'Player,GameSession,PatientState,EventHistory',
+  EntityTypes: 'Player GameSession PatientState EventHistory',
 } as const;

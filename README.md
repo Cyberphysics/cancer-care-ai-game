@@ -183,6 +183,15 @@ aws cloudformation describe-stacks \
 
 ### 验证
 
+一键冒烟测试（覆盖栈状态、API 路由、CloudFront SPA 回退、DynamoDB 结构，共 17 项）：
+
+```bash
+./scripts/smoke.sh
+# 或指定 profile：./scripts/smoke.sh my-profile
+```
+
+手动验证：
+
 ```bash
 API=$(aws cloudformation describe-stacks --stack-name CancercareGameMvp-Api \
   --query 'Stacks[0].Outputs[?OutputKey==`ApiBaseUrl`].OutputValue' --output text \
@@ -254,6 +263,11 @@ npm run destroy
 - 前端为占位页，不调用 API
 - 未配置自定义域名与 ACM 证书，直接使用 `*.cloudfront.net`
 - 无 CI/CD 流水线
+- **请求不存在的静态资源返回 403 而非 404**：OAC + BlockPublicAccess 下桶不授予
+  `s3:ListBucket`，S3 对缺失的 key 返回 AccessDenied，CloudFront 原样透传。
+  这是预期行为；关键性质是**缺失资源不会被伪装成 200 的 `index.html`**（由 CloudFront
+  Function 只重写无扩展名路径来保证）。如需 404 语义，需额外提供错误页并通过
+  `ResponsePagePath` 映射——Phase 0 不引入这点额外复杂度
 
 > ⚠️ **大陆网络访问提示**：本项目面向 AWS UG China 挑战，但 CloudFront 默认的
 > `*.cloudfront.net` 域名在中国大陆访问可能缓慢或不稳定，且 CloudFront 在中国大陆
