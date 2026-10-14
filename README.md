@@ -6,18 +6,23 @@
 
 ---
 
-## 当前状态：Phase 2 — 游戏核心
+## 当前状态：Phase 3 Stage A — Agent 叙事层
 
-**游戏机制已完整可玩（通过 API），但还没有游戏界面。** 五阶段照护循环由规则引擎驱动，**完全不依赖任何 LLM**；Agent 将在 Phase 3 引入。
+**游戏机制完整可玩（通过 API），并且现在有了 AI 叙事层。** 五阶段照护循环由规则引擎驱动，**完全不依赖任何 LLM**；GameMaster Agent 作为**可选叠加层**生成个性化解释与结局总结。
 
 | 已实现 | 尚未实现 |
 |---|---|
-| 五阶段规则引擎（事件池、选择判定、状态演进） | AgentCore Runtime / Memory / Gateway（Phase 3） |
-| HTTP API 8 条路由全部真实实现 | 前端游戏界面（Phase 4） |
-| DynamoDB 单表 + 稀疏 GSI + 四项原子事务 | 玩家鉴权（Phase 3 计划引入 Cognito） |
+| 五阶段规则引擎（事件池、选择判定、状态演进） | 前端游戏界面（Phase 4） |
+| HTTP API 9 条路由全部真实实现 | AgentCore Gateway（Phase 3 Stage B） |
+| DynamoDB 单表 + 稀疏 GSI + 四项原子事务 | 玩家鉴权 |
 | 双乐观锁 + 幂等提交保护 | 多癌种、成就系统 |
+| AgentCore Runtime + Memory，`deepseek` 与 `bedrock` 可插拔 provider | |
+| 内容护栏（概念可讲、处方禁止）+ 后端二次校验 | |
 | S3 + CloudFront（OAC）+ `/api/*` 反代 | |
-| 79 条单元测试 + 端到端冒烟脚本 | |
+| 100 条 TS 测试 + 38 条 Python 测试 + 端到端冒烟脚本 | |
+
+> ⚠️ **部署前需完成两项一次性准备**（AgentCore IAM 权限 + DeepSeek key 写入 SSM），
+> 详见 **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) §1**。缺少任一项时 Agent 栈无法部署。
 
 ### 快速试玩
 
@@ -339,6 +344,7 @@ npm run destroy
 
 | 文档 | 内容 |
 |---|---|
+| [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) | **部署指南**：一次性准备、构建、部署顺序、排错 |
 | [docs/GAME-RULES.md](docs/GAME-RULES.md) | 规则引擎：四维健康模型、阶段流转、事件池、事务与并发 |
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 架构、Phase 2 请求链路、Phase 3 AgentCore 设计与模型选型 |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | DynamoDB 单表键模式、GSI、访问模式、乐观锁 |
