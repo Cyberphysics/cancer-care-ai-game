@@ -1,0 +1,38 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+*.tsbuildinfo
+
+# CDK synthesized artifacts
+cdk.out/
+
+# CDK context cache — commit it deliberately if an env lookup is ever introduced
+cdk.context.json
+
+# Environment files (never commit real values)
+.env
+.env.*
+!.env.example
+
+# Logs
+*.log
+npm-debug.log*
+yarn-error.log*
+
+# Test coverage
+coverage/
+
+# Editor / OS
+.DS_Store
+.idea/
+.vscode/*
+!.vscode/extensions.json
+
+# Secrets — never commit these
+*.pem
+*.key
+*.p12
+credentials

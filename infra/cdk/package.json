@@ -1,0 +1,34 @@
+{
+  "name": "cancercare-game-infra",
+  "version": "0.1.0",
+  "private": true,
+  "description": "AWS CDK infrastructure for CancerCare AI Game",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "watch": "tsc -w --noEmit",
+    "test": "jest",
+    "synth": "cdk synth --profile cancercare-game-mvp",
+    "list": "cdk list --profile cancercare-game-mvp",
+    "diff": "cdk diff --profile cancercare-game-mvp",
+    "deploy": "cdk deploy --all --profile cancercare-game-mvp",
+    "deploy:data": "cdk deploy CancercareGameMvp-Data --profile cancercare-game-mvp",
+    "deploy:api": "cdk deploy CancercareGameMvp-Api --profile cancercare-game-mvp",
+    "deploy:frontend": "cdk deploy CancercareGameMvp-Frontend --profile cancercare-game-mvp",
+    "destroy": "cdk destroy --all --profile cancercare-game-mvp",
+    "cdk": "cdk"
+  },
+  "devDependencies": {
+    "@swc/core": "^1.15.0",
+    "@swc/jest": "^0.2.39",
+    "@types/jest": "^30",
+    "@types/node": "^24.10.1",
+    "jest": "^30",
+    "aws-cdk": "2.1145.0",
+    "tsx": "^4.23.0",
+    "typescript": "~7.0.2"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "2.273.0",
+    "constructs": "^10.5.0"
+  }
+}

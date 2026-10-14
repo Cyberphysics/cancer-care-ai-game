@@ -1,0 +1,20 @@
+{
+  "name": "cancer-care-ai-game",
+  "version": "0.1.0",
+  "private": true,
+  "description": "CancerCare AI Game (生命守护者) — an AI-agent-driven cancer health-education simulation game built on Amazon Bedrock AgentCore",
+  "license": "MIT",
+  "scripts": {
+    "install:all": "npm --prefix frontend install && npm --prefix infra/cdk install",
+    "dev:web": "npm --prefix frontend run dev",
+    "build:web": "npm --prefix frontend run build",
+    "synth": "npm --prefix infra/cdk run synth",
+    "diff": "npm --prefix infra/cdk run diff",
+    "test": "npm --prefix infra/cdk test",
+    "deploy": "npm run build:web && npm --prefix infra/cdk run deploy",
+    "destroy": "npm --prefix infra/cdk run destroy"
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
