@@ -12,12 +12,17 @@ import {
  *
  * Latency budget — the binding constraint is API Gateway, not Lambda:
  *
- *   API Gateway HTTP API integration timeout   ~30 s (not configurable)
- *   this Lambda's timeout                       29 s (kept just under)
- *   the agent's own provider call               20 s (kept under both)
+ *   CloudFront origin response timeout         30 s (raisable to 120 s)
+ *   API Gateway HTTP API integration timeout   30 s (hard cap, not raisable)
+ *   this Lambda's timeout                      29 s (kept just under)
+ *   the agent's own provider call              20 s (kept under both)
  *
- * Each layer is set below the one above it so a slow model surfaces as a clean
- * "provider timed out" message rather than an opaque gateway 504.
+ * The inner bounds are what buy a clean error: the provider timeout fires while
+ * this Lambda is still alive, so a slow model surfaces as an actionable
+ * "provider timed out" rather than an opaque gateway 504. Bounding this Lambda
+ * below the gateway does not do that — a Lambda that hits its own timeout is
+ * killed and the caller still sees the gateway's 504; it only makes that case
+ * less likely.
  */
 
 const client = new BedrockAgentCoreClient({});

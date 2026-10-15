@@ -44,7 +44,11 @@ Data -> Agent -> Api -> Frontend
 
 这里有个容易踩的配置：CloudFront 默认会把 viewer 的 `Host` 头转发给源站，而 API Gateway 只接受自己的域名，结果是一律 403。必须用 `originRequestPolicy` 排除 `Host` 头。冒烟脚本里专门有一项检查就是为它准备的。
 
-**为什么 Lambda 超时是 29 秒。** API Gateway HTTP API 的集成超时约 30 秒且不可配置。整个链路上每一层都要比上一层短：Lambda 29 秒 < API Gateway 30 秒，Agent 侧调用模型 20 秒 < Lambda 29 秒。这样一层超时会以「上游超时」这种干净的错误暴露出来，而不是一个语焉不详的网关 504。
+**为什么 Lambda 超时是 29 秒。** 这句话我原先写的是「API Gateway 的集成超时约 30 秒且不可配置」，两处都不准。浏览器的请求要穿过四跳才到 DynamoDB，其中只有一跳是不可松动的：CloudFront 的源站响应超时默认也是 30 秒，但**可以调**，默认配额就允许调到 120 秒；API Gateway **HTTP API** 的集成超时同样封顶 30 秒，而它**不可提升**——2024 年 6 月 AWS 放开过一次集成超时，但只覆盖 Regional 与私有 REST API，HTTP API 不在其列。真正的约束是这一跳。Lambda 的 29 秒是被它逼出来的，不是 Lambda 的限制——Lambda 上限是 900 秒。
+
+顺带一提，AWS 自家文档在这件事上并不一致：配额页说 HTTP API 是 50 毫秒到 30 秒、默认 30 秒，而 CDK 里 `HttpIntegration.timeout` 的注释写的是「50 毫秒到 29 秒」、默认 29 秒。如果这个 29 秒才是对的，那本文这个数字的出处就比我原先以为的更直接。
+
+超时的层次则要分开看，不能一概而论。内层是有效的：Agent 调用模型 20 秒 < Lambda 29 秒，模型拖慢时 Lambda 还活着，能捕获这个超时并返回一个干净的 502 `UPSTREAM_FAILED`。但这层保护不外推到 Lambda 自己——如果 Lambda 撞满 29 秒，它被直接终止，什么都返回不了，客户端拿到的照样是一个语焉不详的网关 504。所以让每一层都比上一层短，作用不是「把超时变成干净错误」，而是让**最外层的那个超时尽量不发生**。
 
 这条链路上任何一环断掉，页面底部这一栏都会如实反映出来——它本身走的就是「CloudFront → API Gateway → Lambda → DynamoDB」这条完整路径：
 

@@ -160,7 +160,7 @@ curl -s -X POST "$API/api/v1/sessions/$SID/narration" \
 | `Runtime` 创建失败，提示 `exec format error` | zip 不是 ARM64 —— 见 §2 |
 | Agent 栈创建 `AWS::Logs::Delivery` 失败，`InvalidRequest: X-Ray Delivery Destination is supported with CloudWatch Logs as a Trace Segment Destination` | Runtime 的 trace 投递要求**账号级**把 X-Ray 的 trace segment destination 切成 CloudWatch Logs（`aws xray update-trace-segment-destination`）。该设置是账号级的，会同时搬走同账号其他项目的 trace，所以默认关闭；确实要开再 `cdk deploy -c agentTracing=true`。见 `lib/config.ts` 的 `agentTracing` |
 | narration 返回 502 `UPSTREAM_FAILED` | Agent 侧问题：SSM key 未写入/错误、模型配额、或出网被阻 |
-| narration 请求 504 | 超过 API Gateway 的 ~30 秒集成超时；检查模型延迟 |
+| narration 请求 504 | 超过 API Gateway 的 30 秒集成超时（HTTP API 的硬上限，不可提升）；检查模型延迟 |
 | 首次调用非常慢 | Runtime microVM 冷启动，属正常；结果会被缓存 |
 | Memory 回忆始终为空 | 命名空间不匹配，见 `agents/game-master/app/memory.py` 的 `PLAYER_NAMESPACE_PREFIX` |
 

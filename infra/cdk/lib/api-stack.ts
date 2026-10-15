@@ -64,9 +64,10 @@ export class ApiStack extends cdk.Stack {
       architecture: lambda.Architecture.ARM_64,
       memorySize: 512,
       // Sized for the narration route, which waits on the agent runtime and the
-      // model. The binding limit is API Gateway's ~30 s integration timeout —
-      // go over that and the caller sees an opaque 504 instead of the real
-      // error. The agent's own provider timeout is set below both.
+      // model. The binding limit is API Gateway's 30 s HTTP API integration
+      // timeout, which is a hard cap — go over it and the caller sees an opaque
+      // 504 instead of the real error. The agent's own provider timeout is set
+      // below both.
       timeout: cdk.Duration.seconds(29),
       tracing: lambda.Tracing.ACTIVE,
       logGroup,
