@@ -188,3 +188,287 @@ code {
   font-size: 0.8rem;
   text-align: center;
 }
+
+.badge-neutral {
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--text);
+  border: 1px solid var(--border);
+}
+
+/* ------------------------------------------------------------------ *
+ * Stage stepper states
+ * ------------------------------------------------------------------ */
+
+.stage-current {
+  border-color: var(--accent);
+  background: rgba(79, 209, 165, 0.08);
+}
+
+.stage-todo {
+  opacity: 0.45;
+}
+
+.stage-todo .step-index {
+  background: rgba(255, 255, 255, 0.08);
+  color: var(--muted);
+}
+
+/* ------------------------------------------------------------------ *
+ * Buttons and form controls
+ * ------------------------------------------------------------------ */
+
+.btn {
+  appearance: none;
+  border: 1px solid var(--border);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--text);
+  border-radius: 8px;
+  padding: 0.6rem 1.1rem;
+  font-size: 0.95rem;
+  font-family: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.btn:hover:not(:disabled) {
+  border-color: var(--accent);
+}
+
+.btn:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.btn-primary {
+  background: rgba(79, 209, 165, 0.16);
+  border-color: rgba(79, 209, 165, 0.5);
+  color: var(--accent);
+  font-weight: 600;
+}
+
+.btn-choice {
+  text-align: left;
+  width: 100%;
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--muted);
+  margin-top: 0.5rem;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  margin: 1rem 0;
+}
+
+.field label {
+  color: var(--muted);
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.field input {
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.field input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.error-text {
+  color: #f08a8a;
+  font-size: 0.9rem;
+  margin: 0.75rem 0 0;
+}
+
+/* ------------------------------------------------------------------ *
+ * Health dimensions
+ * ------------------------------------------------------------------ */
+
+.health-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+  margin-top: 0.5rem;
+}
+
+.health-row {
+  display: grid;
+  grid-template-columns: 6.5rem 1fr 5rem;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.health-label {
+  display: flex;
+  flex-direction: column;
+  font-size: 0.9rem;
+}
+
+.health-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  overflow: hidden;
+}
+
+.health-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: var(--accent);
+  transition: width 0.3s ease;
+}
+
+/* Stress: a longer bar means a worse patient, so it reads in the warning colour. */
+.health-fill-inverse {
+  background: var(--warn);
+}
+
+.health-value {
+  display: flex;
+  align-items: baseline;
+  gap: 0.4rem;
+  justify-content: flex-end;
+}
+
+.delta {
+  font-size: 0.8rem;
+  font-weight: 700;
+}
+
+.delta-good {
+  color: var(--accent);
+}
+
+.delta-bad {
+  color: #f08a8a;
+}
+
+/* ------------------------------------------------------------------ *
+ * Event and result
+ * ------------------------------------------------------------------ */
+
+.event-head {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.event-desc {
+  margin: 0 0 1rem;
+  color: var(--text);
+}
+
+.choices {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.choice-made {
+  font-size: 1.05rem;
+  font-weight: 600;
+  margin: 0 0 1rem;
+}
+
+.impact-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  margin-bottom: 1rem;
+}
+
+.rationale {
+  border-left: 2px solid var(--border);
+  padding-left: 0.9rem;
+  margin-bottom: 1.25rem;
+}
+
+.rationale h3 {
+  font-size: 0.8rem;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--muted);
+  margin: 0 0 0.35rem;
+}
+
+.rationale p {
+  margin: 0;
+  color: var(--text);
+}
+
+.result {
+  border-color: rgba(79, 209, 165, 0.35);
+}
+
+/* ------------------------------------------------------------------ *
+ * Timeline
+ * ------------------------------------------------------------------ */
+
+.timeline {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.timeline li {
+  display: flex;
+  flex-direction: column;
+  border-left: 2px solid var(--border);
+  padding-left: 0.9rem;
+}
+
+.timeline-title {
+  font-weight: 600;
+}
+
+.timeline-choice {
+  color: var(--muted);
+  font-size: 0.9rem;
+}
+
+/* ------------------------------------------------------------------ *
+ * Narration
+ * ------------------------------------------------------------------ */
+
+.narration-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-bottom: 0.9rem;
+}
+
+.narration-text p {
+  margin: 0 0 0.85rem;
+}
+
+.narration-text p:last-child {
+  margin-bottom: 0;
+}
+
+.narration-loading,
+.narration-error {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  align-items: flex-start;
+}
+
+.narration-loading .muted,
+.narration-error .muted {
+  margin: 0;
+}
