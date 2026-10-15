@@ -44,7 +44,7 @@ function ConnectivityCard() {
 
   if (state.kind === 'loading') {
     return (
-      <section className="card">
+      <section className="card narrow-card">
         <h2>链路自检</h2>
         <p className="muted">正在连接 API…</p>
       </section>
@@ -53,7 +53,7 @@ function ConnectivityCard() {
 
   if (state.kind === 'error') {
     return (
-      <section className="card boundary">
+      <section className="card narrow-card boundary">
         <h2>链路自检</h2>
         <div className="status-row">
           <span className="badge badge-err">连接失败</span>
@@ -70,7 +70,7 @@ function ConnectivityCard() {
 
   const { data } = state;
   return (
-    <section className="card">
+    <section className="card narrow-card">
       <h2>链路自检</h2>
       <div className="status-row">
         <span className="badge badge-ok">CloudFront → API → Lambda → DynamoDB 全通</span>
@@ -106,7 +106,7 @@ export default function App() {
 
       <ConnectivityCard />
 
-      <section className="card boundary">
+      <section className="card narrow-card boundary">
         <h2>安全边界</h2>
         <p className="muted">
           本游戏仅用于健康教育。不提供医疗诊断、个体治疗方案、药物推荐或生存预测。

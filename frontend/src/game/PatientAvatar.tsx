@@ -144,10 +144,12 @@ export default function PatientAvatar({ health, stage, reaction }: PatientAvatar
         </g>
       </svg>
 
+      {/* Just the overall reading of the face. The other three conditions are
+          already legible in the health bars directly below, and listing all four
+          here wrapped to three lines inside a 112px column. All four stay in the
+          svg's aria-label, so nothing is lost for assistive tech. */}
       <div className="avatar-caption">
         <span className="avatar-caption-item">{visual.labels.wellbeing}</span>
-        <span className="avatar-caption-item muted">{visual.labels.energy}</span>
-        <span className="avatar-caption-item muted">{visual.labels.calm}</span>
       </div>
     </div>
   );

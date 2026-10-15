@@ -137,7 +137,7 @@ export default function GameApp() {
 
   if (screen.kind === 'intro' || screen.kind === 'starting' || screen.kind === 'failed') {
     return (
-      <section className="card">
+      <section className="card intro-card">
         <h2>开始一次照护</h2>
         <p className="muted">
           你将以「家庭健康守护者」的身份，陪一位合成病例患者走完从预防到康复的五阶段历程。
@@ -181,7 +181,7 @@ export default function GameApp() {
 
   if (completed) {
     return (
-      <>
+      <div className="completion">
         {notice && <p className="error-text">{notice}</p>}
 
         <StageStepper currentStage={session.currentStage} completed />
@@ -243,7 +243,7 @@ export default function GameApp() {
         <button type="button" className="btn btn-ghost" onClick={reset}>
           再玩一次
         </button>
-      </>
+      </div>
     );
   }
 
@@ -251,55 +251,71 @@ export default function GameApp() {
     <>
       {notice && <p className="error-text">{notice}</p>}
 
-      <section className="card patient-card">
-        <PatientAvatar
-          health={session.health}
-          stage={session.currentStage}
-          reaction={result?.impact}
-        />
-        <div className="patient-card-body">
-          <h2>{patient.displayName}</h2>
-          <div className="status-row">
-            <span className="badge badge-neutral">
-              {patient.gender === 'male' ? '男' : '女'} · {patient.age} 岁
-            </span>
-            <span className="muted">{patient.occupation}</span>
+      {/* Two columns so the choices and the patient are on screen together: the
+          point of the avatar is watching it react *while* choosing, which only
+          works if the player never has to scroll between the two. The patient
+          side is sticky, so it also stays put if the right column grows. */}
+      <div className="play-layout">
+        <aside className="play-side">
+          <div className="caregiver-line">
+            照护者 · <strong>{nickname.trim() || '你'}</strong>
           </div>
-          <p className="muted small">风险因素：{patient.riskFactors.join('、')}</p>
+
+          <section className="card patient-card">
+            <PatientAvatar
+              health={session.health}
+              stage={session.currentStage}
+              reaction={result?.impact}
+            />
+            <div className="patient-card-body">
+              <h2>{patient.displayName}</h2>
+              <div className="status-row">
+                <span className="badge badge-neutral">
+                  {patient.gender === 'male' ? '男' : '女'} · {patient.age} 岁
+                </span>
+                <span className="muted small">{patient.occupation}</span>
+              </div>
+              <p className="muted small">风险因素：{patient.riskFactors.join('、')}</p>
+            </div>
+          </section>
+
+          <StageStepper currentStage={session.currentStage} completed={false} />
+
+          <HealthPanel
+            health={session.health}
+            qualityOfLife={session.qualityOfLife}
+            score={session.score}
+            highlight={result?.impact}
+          />
+        </aside>
+
+        <div className="play-main">
+          <EventCard
+            event={result ? null : (session.activeEvent ?? null)}
+            awaitingAdvance={session.awaitingAdvance}
+            busy={busy}
+            result={result}
+            onChoose={(choiceId) => void choose(choiceId)}
+            onContinue={() => setResult(null)}
+            onAdvance={() => void advance()}
+          />
+
+          {/* Offered only once there is something to comment on, and only before
+              the summary: the choice narration is cached per session, so asking
+              for it repeatedly would keep returning the same text. Lives in this
+              column rather than below the grid so it fills the space under the
+              choices instead of leaving the right half empty. */}
+          {!result && session.activeEvent && timeline.length === 0 && (
+            <NarrationPanel
+              sessionId={session.sessionId}
+              kind="choice"
+              title="AI 点评"
+              buttonLabel="让 AI 点评本次照护"
+              note="按会话缓存：同一会话只会生成一次，之后返回的是同一条内容。"
+            />
+          )}
         </div>
-      </section>
-
-      <StageStepper currentStage={session.currentStage} completed={false} />
-
-      <HealthPanel
-        health={session.health}
-        qualityOfLife={session.qualityOfLife}
-        score={session.score}
-        highlight={result?.impact}
-      />
-
-      <EventCard
-        event={result ? null : (session.activeEvent ?? null)}
-        awaitingAdvance={session.awaitingAdvance}
-        busy={busy}
-        result={result}
-        onChoose={(choiceId) => void choose(choiceId)}
-        onContinue={() => setResult(null)}
-        onAdvance={() => void advance()}
-      />
-
-      {/* Offered only once there is something to comment on, and only before the
-          summary: the choice narration is cached per session, so asking for it
-          repeatedly would keep returning the same text. */}
-      {!result && session.activeEvent && timeline.length === 0 && (
-        <NarrationPanel
-          sessionId={session.sessionId}
-          kind="choice"
-          title="AI 点评"
-          buttonLabel="让 AI 点评本次照护"
-          note="按会话缓存：同一会话只会生成一次，之后返回的是同一条内容。"
-        />
-      )}
+      </div>
     </>
   );
 }
