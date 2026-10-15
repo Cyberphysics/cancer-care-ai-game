@@ -105,14 +105,21 @@ GDD 原定的 Phase 1（初始化 React、初始化 CDK、创建 AWS 资源、�
 - 复用 Phase 2 已实现的 `applyValidatedDelta()` 做外部提议的边界校验（它目前尚无调用方）
 - **审计轨迹**：每次 Agent 发起的状态变更都记录来源与理由
 
-**前置条件（阻塞项，按优先级）**
+**前置条件（按优先级）**
 
-- [ ] 🔴 **提 bedrock-allowlisting 工单** —— 本轮实测确认账号被此门槛阻断，**任何 IAM 策略都无法绕过**。
-      实测报错见 [ARCHITECTURE.md](ARCHITECTURE.md) §6.3。这是唯一写代码解决不了的问题，应最先启动。
-- [ ] 🔴 **补齐 `bedrock-agentcore:*` IAM 权限** —— 当前实测 `implicitDeny`，见 [IAM-PERMISSIONS.md](IAM-PERMISSIONS.md) §B
-- [ ] 🟡 确认模型选择：`deepseek.v3.2`（Bedrock，已实测存在且为 `ON_DEMAND`）或直连 DeepSeek 官方 API。
-      Phase 3 已设计为**可插拔 provider**，两条路都保留 —— 见 [ARCHITECTURE.md](ARCHITECTURE.md) §6.6
-- [ ] 🟡 确认 `policy/*` 构造在稳定模块中的可用性（正式模块 vs alpha 包存在冲突）
+- [x] ✅ **补齐 `bedrock-agentcore:*` IAM 权限** —— 2026-10-15 已挂载，Agent 栈部署成功
+- [x] ✅ **确认模型选择**：走 `DeepSeekProvider` 直连 `api.deepseek.com`，端到端已验证
+      （首次 10s：Runtime 冷启动 + 生成；二次 1s 命中缓存）
+- [x] ✅ `policy/*` 构造在稳定模块 `aws-cdk-lib/aws-bedrockagentcore` 中可用，无需 alpha 包
+- [ ] 🔴 **提 bedrock-allowlisting 工单** —— 仍然阻断，但**与当前方案无关**：`MODEL_PROVIDER=deepseek`
+      走官方 API，Bedrock 通道只是保留的可选项。实测报错见 [ARCHITECTURE.md](ARCHITECTURE.md) §6.3
+
+**Stage A 部署时踩到的两个真实缺陷**（都不是环境问题，模板上看不出来）
+
+1. Runtime 的 X-Ray trace 投递要求**账号级**把 trace segment destination 切成 CloudWatch Logs，
+   而那是账号级设置。现由 `config.agentTracing` 控制、默认关闭。
+2. 执行角色缺 `logs:PutResourcePolicy`，只在部署期以 CloudTrail AccessDenied 现形（CDK L2 不授予）。
+   另：处理器传 `runtimeUserId` 时，调用要求的动作是 `InvokeAgentRuntimeForUser` 而非 `InvokeAgentRuntime`。
 
 **退出标准**：一次 Gateway 工具调用能经后端校验后变更状态，并留下可追溯的审计记录
 

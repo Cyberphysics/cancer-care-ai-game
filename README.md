@@ -19,7 +19,7 @@
 | AgentCore Runtime + Memory，`deepseek` 与 `bedrock` 可插拔 provider | |
 | 内容护栏（概念可讲、处方禁止）+ 后端二次校验 | |
 | S3 + CloudFront（OAC）+ `/api/*` 反代 | |
-| 100 条 TS 测试 + 38 条 Python 测试 + 端到端冒烟脚本 | |
+| 104 条 TS 测试 + 38 条 Python 测试 + 端到端冒烟脚本（42 项） | |
 
 > ⚠️ **部署前需完成两项一次性准备**（AgentCore IAM 权限 + DeepSeek key 写入 SSM），
 > 详见 **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) §1**。缺少任一项时 Agent 栈无法部署。
@@ -92,9 +92,10 @@
                         Bedrock Models
 ```
 
-> AgentCore 部分**尚未编写任何 CDK 代码**，为 Phase 3 交付项。设计详见
-> [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，三个 Agent 的职责与工具契约详见
-> [docs/AGENT-DESIGN.md](docs/AGENT-DESIGN.md)。
+> Runtime 与 Memory 已实现并部署（`CancercareGameMvp-Agent` 栈）；**Gateway 是 Stage B，尚未编写**。
+> 设计详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)，三个 Agent 的职责与工具契约详见
+> [docs/AGENT-DESIGN.md](docs/AGENT-DESIGN.md)。当前推理走 `DeepSeekProvider` 直连官方 API，
+> 不经 Bedrock —— 账号的 allowlisting 阻断只影响保留的 `BedrockProvider` 通道。
 
 ---
 
@@ -171,9 +172,9 @@ cancer-care-ai-game/
 | IAM | 最小权限角色与策略 | **Phase 0** |
 | CloudWatch / X-Ray | 日志、指标、链路追踪 | **Phase 0**（已启用 tracing） |
 | Bedrock | LLM 推理（`deepseek.v3.2` 或 Claude） | Phase 3（**当前被 allowlisting 阻断**） |
-| AgentCore Runtime | Agent 执行环境（GameMaster） | Phase 3 |
-| AgentCore Memory | 长期记忆（玩家偏好，**非**数据库） | Phase 3 |
-| AgentCore Gateway | 工具调用面（MCP） | Phase 3 |
+| AgentCore Runtime | Agent 执行环境（GameMaster） | **Phase 3 Stage A**（已部署） |
+| AgentCore Memory | 长期记忆（玩家偏好，**非**数据库） | **Phase 3 Stage A**（已部署） |
+| AgentCore Gateway | 工具调用面（MCP） | Phase 3 Stage B |
 
 ---
 
@@ -294,7 +295,7 @@ VITE_API_PROXY_TARGET=https://<api-id>.execute-api.us-east-1.amazonaws.com
 | 3 | 玩家选择：主动预约检查，立即看到 impact 与解释 | ✅ `POST /choices` |
 | 4 | 走完一个阶段，显式推进；重复提交被拒 | ✅ `POST /advance` |
 | 5 | 完成五阶段，得到最终 QoL 与完整事件时间线 | ✅ |
-| 6 | Agent 生成个性化反馈与总结 | ⏳ Phase 3 |
+| 6 | Agent 生成个性化反馈与总结 | ✅ `POST /sessions/{id}/narration`（首次约 10s，其后命中缓存约 1s） |
 
 一键跑完上述全部流程：
 
