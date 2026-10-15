@@ -77,4 +77,24 @@ describe('ApiStack', () => {
       expect(asArray(statement.Resource)).not.toContain('*');
     }
   });
+
+  test('grants both invoke actions the narration route needs', () => {
+    // The handler passes `runtimeUserId` so Memory is actor-scoped, and that
+    // user context swaps the required action to `InvokeAgentRuntimeForUser`.
+    // Granting only `InvokeAgentRuntime` deploys cleanly and then fails every
+    // narration request with an AccessDenied.
+    const policies = template.findResources('AWS::IAM::Policy');
+    const statements = Object.values(policies).flatMap(
+      (policy) => policy.Properties.PolicyDocument.Statement ?? [],
+    );
+
+    const invoke = statements.filter((s: { Action?: unknown }) =>
+      JSON.stringify(s.Action).includes('bedrock-agentcore:InvokeAgentRuntime'),
+    );
+    expect(invoke).toHaveLength(1);
+    expect(invoke[0].Action).toEqual([
+      'bedrock-agentcore:InvokeAgentRuntime',
+      'bedrock-agentcore:InvokeAgentRuntimeForUser',
+    ]);
+  });
 });

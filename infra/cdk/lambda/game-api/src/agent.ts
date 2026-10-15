@@ -62,17 +62,30 @@ function runtimeArn(): string {
 }
 
 export async function invokeGameMaster(request: NarrationRequest): Promise<NarrationResult> {
-  const response = await client.send(
-    new InvokeAgentRuntimeCommand({
-      agentRuntimeArn: runtimeArn(),
-      // Propagates the player identity to the agent so Memory is scoped to the
-      // right actor without the client passing it in the payload.
-      runtimeUserId: request.playerId,
-      contentType: 'application/json',
-      accept: 'application/json',
-      payload: Buffer.from(JSON.stringify(request), 'utf-8'),
-    }),
-  );
+  let response;
+  try {
+    response = await client.send(
+      new InvokeAgentRuntimeCommand({
+        agentRuntimeArn: runtimeArn(),
+        // Propagates the player identity to the agent so Memory is scoped to the
+        // right actor without the client passing it in the payload.
+        runtimeUserId: request.playerId,
+        contentType: 'application/json',
+        accept: 'application/json',
+        payload: Buffer.from(JSON.stringify(request), 'utf-8'),
+      }),
+    );
+  } catch (err) {
+    // Anything that stops the call from succeeding — a missing permission, a
+    // deleted runtime, throttling — is the same thing from the game's point of
+    // view: the narrative layer is unavailable and play continues without it.
+    // Reported as a 502 like every other agent-side failure; letting the raw SDK
+    // error escape would surface it as a 500 and misrepresent a survivable
+    // condition as a backend fault.
+    throw new AgentUnavailableError(
+      `InvokeAgentRuntime failed: ${err instanceof Error ? err.message : String(err)}`,
+    );
+  }
 
   if (!response.response) {
     throw new AgentUnavailableError('Agent runtime returned an empty response body');

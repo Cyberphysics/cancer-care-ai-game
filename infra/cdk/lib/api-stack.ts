@@ -98,10 +98,18 @@ export class ApiStack extends cdk.Stack {
     // Invoke the agent runtime. Scoped to the runtime and its endpoints — the
     // runtime ARN alone is not sufficient, AgentCore also authorises the
     // `/runtime-endpoint/*` form.
+    //
+    // Both actions are needed, and they are not interchangeable: the Lambda
+    // passes `runtimeUserId` so Memory is scoped to the right actor, and that
+    // user context is what makes the service demand `InvokeAgentRuntimeForUser`.
+    // Granting only `InvokeAgentRuntime` produces an AccessDenied at call time.
     fn.addToRolePolicy(
       new iam.PolicyStatement({
         sid: 'InvokeGameMasterRuntime',
-        actions: ['bedrock-agentcore:InvokeAgentRuntime'],
+        actions: [
+          'bedrock-agentcore:InvokeAgentRuntime',
+          'bedrock-agentcore:InvokeAgentRuntimeForUser',
+        ],
         resources: [agentRuntimeArn, `${agentRuntimeArn}/*`],
       }),
     );
