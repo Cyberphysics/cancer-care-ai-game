@@ -34,6 +34,9 @@ yarn-error.log*
 # Test coverage
 coverage/
 
+# Local environment notes — account id, profile names. Kept on disk, not published.
+local-dev-env-info.md
+
 # Editor / OS
 .DS_Store
 .idea/
