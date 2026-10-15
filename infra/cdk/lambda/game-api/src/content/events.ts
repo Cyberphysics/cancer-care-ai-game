@@ -25,7 +25,7 @@ export const EVENT_CATALOG: readonly EventTemplate[] = [
     type: 'medical',
     title: '持续咳嗽两个月',
     description:
-      '王先生最近持续咳嗽两个月，偶尔觉得胸闷。他自己说「可能是天气干燥」，但你也注意到他最近精神不太好。',
+      '咳嗽已经持续两个月，偶尔还觉得胸闷。对方说「可能是天气干燥」，但你也注意到最近精神不太好。',
     choices: [
       {
         id: 'A',
@@ -58,7 +58,7 @@ export const EVENT_CATALOG: readonly EventTemplate[] = [
     stage: 'prevention',
     type: 'care',
     title: '一起调整生活习惯',
-    description: '医生提到生活方式与长期健康有关。王先生抽了很多年烟，也几乎不运动。',
+    description: '医生提到生活方式与长期健康有关。对方抽了很多年烟，也几乎不运动。',
     choices: [
       {
         id: 'A',
@@ -70,7 +70,7 @@ export const EVENT_CATALOG: readonly EventTemplate[] = [
       },
       {
         id: 'B',
-        text: '口头提醒他少抽一点',
+        text: '口头提醒对方少抽一点',
         impact: { stress: 2 },
         score: 5,
         rationale: '口头提醒成本低，但缺少具体安排时通常难以转化为持续的改变。',
@@ -250,7 +250,7 @@ export const EVENT_CATALOG: readonly EventTemplate[] = [
     stage: 'treatment',
     type: 'care',
     title: '治疗期间的吃饭问题',
-    description: '治疗期间胃口变差，家里人想给他「好好补一补」。',
+    description: '治疗期间胃口变差，家里人想着「好好补一补」。',
     choices: [
       {
         id: 'A',
@@ -262,7 +262,7 @@ export const EVENT_CATALOG: readonly EventTemplate[] = [
       },
       {
         id: 'B',
-        text: '多炖补品，尽量让他多吃',
+        text: '多炖补品，劝对方多吃一点',
         impact: { qualityOfLife: -3, nutrition: -5, stress: 3 },
         score: -5,
         rationale:
