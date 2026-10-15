@@ -21,6 +21,9 @@ cdk.out/
 # CDK context cache — commit it deliberately if an env lookup is ever introduced
 cdk.context.json
 
+# CodeGraph index — local code-intelligence cache, rebuilt by `codegraph init`
+.codegraph/
+
 # Environment files (never commit real values)
 .env
 .env.*
