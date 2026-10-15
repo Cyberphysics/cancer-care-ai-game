@@ -8,6 +8,8 @@
 #   3. The CloudFront -> API Gateway proxy
 #   4. The DynamoDB table shape
 #   5. The game loop, via scripts/game-loop-check.py
+#   6. The AI narration layer, via scripts/narration-check.py (skipped when the
+#      optional Agent stack is not deployed)
 #
 # Usage:  ./scripts/smoke.sh [profile] [--full]
 #         --full  additionally plays a complete five-stage session
@@ -145,6 +147,33 @@ fi
 
 pass=$((pass + PYPASS))
 fail=$((fail + PYFAIL))
+
+section "AI 叙事层 (AgentCore)"
+AGENT_STATUS=$(aws cloudformation describe-stacks --stack-name "$PREFIX-Agent" \
+  --profile "$PROFILE" --region "$REGION" \
+  --query 'Stacks[0].StackStatus' --output text 2>/dev/null || echo "MISSING")
+case "$AGENT_STATUS" in
+  CREATE_COMPLETE|UPDATE_COMPLETE)
+    set +e
+    python3 "$SCRIPT_DIR/narration-check.py" "$API" --profile "$PROFILE" | tee "$RESULT_FILE"
+    set -e
+
+    NPASS=$(sed -n 's/.*NARRATION_RESULT pass=\([0-9]*\) fail=\([0-9]*\).*/\1/p' "$RESULT_FILE" | tail -1)
+    NFAIL=$(sed -n 's/.*NARRATION_RESULT pass=\([0-9]*\) fail=\([0-9]*\).*/\2/p' "$RESULT_FILE" | tail -1)
+    if [ -z "$NPASS" ]; then
+      echo "  (叙事层检查未返回结果，视为失败)" >&2
+      NPASS=0
+      NFAIL=1
+    fi
+    pass=$((pass + NPASS))
+    fail=$((fail + NFAIL))
+    ;;
+  *)
+    # Same contract as the Agent stack above: the game is fully playable with no
+    # AI layer at all, so a missing Agent stack is a skip, not a failure.
+    printf '  [ -- ] %-44s %s\n' "AgentCore 叙事层" "未部署（AI 层为可选）"
+    ;;
+esac
 
 echo
 if [ "$fail" -eq 0 ]; then
