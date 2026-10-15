@@ -472,3 +472,98 @@ code {
 .narration-error .muted {
   margin: 0;
 }
+
+/* ------------------------------------------------------------------ *
+ * Patient avatar
+ * ------------------------------------------------------------------ */
+
+.patient-card {
+  display: flex;
+  gap: 1.25rem;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+
+.patient-card-body {
+  flex: 1;
+  min-width: 12rem;
+}
+
+.avatar-frame {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.avatar-frame svg {
+  width: 132px;
+  height: 158px;
+  display: block;
+}
+
+/* Every part that carries state eases between values. This is what makes a
+   choice read as the patient *changing* rather than the picture swapping. */
+.avatar-body,
+.avatar-head,
+.avatar-eye,
+.avatar-brow,
+.avatar-cheek,
+.avatar-mouth,
+.avatar-sweat,
+.avatar-tense {
+  transition:
+    transform 700ms cubic-bezier(0.22, 0.61, 0.36, 1),
+    opacity 700ms ease,
+    fill 700ms ease;
+}
+
+/* CSS transforms on SVG children are resolved against the child's own box, so
+   the rotation/scale happens in place rather than around the viewport origin. */
+.avatar-eye,
+.avatar-brow,
+.avatar-cheek {
+  transform-box: fill-box;
+  transform-origin: center;
+}
+
+.avatar-body {
+  transform-box: fill-box;
+  transform-origin: 50% 100%;
+}
+
+/* Short, non-looping pulse when a choice lands. Applied as a class rather than
+   a remount so the transitions above keep their previous values to animate from. */
+.avatar-reacting svg {
+  animation: avatar-pop 900ms ease;
+}
+
+@keyframes avatar-pop {
+  0% {
+    transform: scale(1);
+  }
+  28% {
+    transform: scale(1.055);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
+.avatar-caption {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 0.1rem;
+  text-align: center;
+}
+
+.avatar-caption-item {
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.avatar-caption-item.muted {
+  font-weight: 400;
+  margin: 0;
+}

@@ -11,6 +11,7 @@ import type { EventResponse, SessionResponse } from '../api/types';
 import EventCard, { type ChoiceResult } from './EventCard';
 import HealthPanel from './HealthPanel';
 import NarrationPanel from './NarrationPanel';
+import PatientAvatar from './PatientAvatar';
 import StageStepper from './StageStepper';
 
 type Screen =
@@ -186,17 +187,25 @@ export default function GameApp() {
         <StageStepper currentStage={session.currentStage} completed />
         <section className="card result">
           <h2>照护完成</h2>
-          <div className="impact-row">
-            <span className="badge badge-ok">最终生活质量 {session.qualityOfLife}</span>
-            <span className="badge badge-neutral">照护得分 {session.score}</span>
-            <span className="badge badge-neutral">
-              {timelineLoading ? '正在读取事件…' : `${timeline.length} 个事件`}
-            </span>
+          <div className="patient-card">
+            <PatientAvatar health={session.health} stage={session.currentStage} />
+            <div className="patient-card-body">
+              <p className="muted">
+                这是 {patient.displayName} 走完五阶段后的状态。
+              </p>
+              <div className="impact-row">
+                <span className="badge badge-ok">最终生活质量 {session.qualityOfLife}</span>
+                <span className="badge badge-neutral">照护得分 {session.score}</span>
+                <span className="badge badge-neutral">
+                  {timelineLoading ? '正在读取事件…' : `${timeline.length} 个事件`}
+                </span>
+              </div>
+              <p className="muted">
+                这套流程由规则引擎完整驱动，全程不需要任何 LLM 参与——即使 AI 完全不可用，
+                你也能走到这里。下面这段总结才来自 Agent。
+              </p>
+            </div>
           </div>
-          <p className="muted">
-            这套流程由规则引擎完整驱动，全程不需要任何 LLM 参与——即使 AI 完全不可用，
-            你也能走到这里。下面这段总结才来自 Agent。
-          </p>
         </section>
 
         {timelineLoading && (
@@ -242,15 +251,22 @@ export default function GameApp() {
     <>
       {notice && <p className="error-text">{notice}</p>}
 
-      <section className="card">
-        <h2>患者</h2>
-        <div className="status-row">
-          <span className="badge badge-neutral">
-            {patient.gender === 'male' ? '男' : '女'} · {patient.age} 岁
-          </span>
-          <span className="muted">{patient.occupation}</span>
+      <section className="card patient-card">
+        <PatientAvatar
+          health={session.health}
+          stage={session.currentStage}
+          reaction={result?.impact}
+        />
+        <div className="patient-card-body">
+          <h2>{patient.displayName}</h2>
+          <div className="status-row">
+            <span className="badge badge-neutral">
+              {patient.gender === 'male' ? '男' : '女'} · {patient.age} 岁
+            </span>
+            <span className="muted">{patient.occupation}</span>
+          </div>
+          <p className="muted small">风险因素：{patient.riskFactors.join('、')}</p>
         </div>
-        <p className="muted small">风险因素：{patient.riskFactors.join('、')}</p>
       </section>
 
       <StageStepper currentStage={session.currentStage} completed={false} />
