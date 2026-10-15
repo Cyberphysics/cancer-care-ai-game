@@ -22,8 +22,8 @@ export default function HealthPanel({ health, qualityOfLife, score, highlight }:
   const changes = new Map(describeDelta(highlight).map((entry) => [entry.key, entry]));
 
   return (
-    <section className="card">
-      <h2>患者状态</h2>
+    <section className="panel-block">
+      <h2 className="panel-title">患者状态</h2>
 
       <div className="health-grid">
         {HEALTH_DIMENSIONS.map((dimension) => {

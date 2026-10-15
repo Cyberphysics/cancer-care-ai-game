@@ -184,7 +184,9 @@ export default function GameApp() {
       <div className="completion">
         {notice && <p className="error-text">{notice}</p>}
 
-        <StageStepper currentStage={session.currentStage} completed />
+        <section className="card">
+          <StageStepper currentStage={session.currentStage} completed />
+        </section>
         <section className="card result">
           <h2>照护完成</h2>
           <div className="patient-card">
@@ -257,36 +259,41 @@ export default function GameApp() {
           side is sticky, so it also stays put if the right column grows. */}
       <div className="play-layout">
         <aside className="play-side">
-          <div className="caregiver-line">
-            照护者 · <strong>{nickname.trim() || '你'}</strong>
-          </div>
-
-          <section className="card patient-card">
-            <PatientAvatar
-              health={session.health}
-              stage={session.currentStage}
-              reaction={result?.impact}
-            />
-            <div className="patient-card-body">
-              <h2>{patient.displayName}</h2>
-              <div className="status-row">
-                <span className="badge badge-neutral">
-                  {patient.gender === 'male' ? '男' : '女'} · {patient.age} 岁
-                </span>
-                <span className="muted small">{patient.occupation}</span>
-              </div>
-              <p className="muted small">风险因素：{patient.riskFactors.join('、')}</p>
+          {/* One card, three blocks separated by rules. Three stacked rounded
+              rectangles in the same column read as clutter and none of their
+              edges lined up with anything on the right. */}
+          <section className="card patient-panel">
+            <div className="caregiver-line">
+              照护者 · <strong>{nickname.trim() || '你'}</strong>
             </div>
+
+            <div className="patient-head">
+              <PatientAvatar
+                health={session.health}
+                stage={session.currentStage}
+                reaction={result?.impact}
+              />
+              <div className="patient-head-body">
+                <h2>{patient.displayName}</h2>
+                <div className="status-row">
+                  <span className="badge badge-neutral">
+                    {patient.gender === 'male' ? '男' : '女'} · {patient.age} 岁
+                  </span>
+                  <span className="muted small">{patient.occupation}</span>
+                </div>
+                <p className="muted small">风险因素：{patient.riskFactors.join('、')}</p>
+              </div>
+            </div>
+
+            <StageStepper currentStage={session.currentStage} completed={false} />
+
+            <HealthPanel
+              health={session.health}
+              qualityOfLife={session.qualityOfLife}
+              score={session.score}
+              highlight={result?.impact}
+            />
           </section>
-
-          <StageStepper currentStage={session.currentStage} completed={false} />
-
-          <HealthPanel
-            health={session.health}
-            qualityOfLife={session.qualityOfLife}
-            score={session.score}
-            highlight={result?.impact}
-          />
         </aside>
 
         <div className="play-main">
@@ -300,12 +307,11 @@ export default function GameApp() {
             onAdvance={() => void advance()}
           />
 
-          {/* Offered only once there is something to comment on, and only before
-              the summary: the choice narration is cached per session, so asking
-              for it repeatedly would keep returning the same text. Lives in this
-              column rather than below the grid so it fills the space under the
-              choices instead of leaving the right half empty. */}
-          {!result && session.activeEvent && timeline.length === 0 && (
+          {/* Kept mounted through the result beat as well as the choice beat: the
+              narration is cached per session, so asking for it repeatedly returns
+              the same text, and hiding it while the outcome is on screen made the
+              right column visibly shorter than the patient panel beside it. */}
+          {session.activeEvent && timeline.length === 0 && (
             <NarrationPanel
               sessionId={session.sessionId}
               kind="choice"

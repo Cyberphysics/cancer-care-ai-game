@@ -3,6 +3,27 @@ import { ApiError, getHealth } from './api/client';
 import type { HealthResponse } from './api/types';
 import GameApp from './game/GameApp';
 
+/**
+ * Two screens, chosen by the URL fragment.
+ *
+ * A hash route rather than a router: two views do not need a dependency, and the
+ * fragment is resolved entirely in the browser — CloudFront never sees it, so no
+ * extra behaviour or SPA-fallback rule is required. It also makes the second
+ * screen linkable and reachable with the back button, which a `useState` toggle
+ * would not.
+ */
+function useHashRoute(): string {
+  const [hash, setHash] = useState(() => window.location.hash);
+
+  useEffect(() => {
+    const onChange = () => setHash(window.location.hash);
+    window.addEventListener('hashchange', onChange);
+    return () => window.removeEventListener('hashchange', onChange);
+  }, []);
+
+  return hash;
+}
+
 type ApiState =
   | { readonly kind: 'loading' }
   | { readonly kind: 'ok'; readonly data: HealthResponse }
@@ -32,19 +53,18 @@ function useApiHealth(): ApiState {
 }
 
 /**
- * Connection card — kept, but demoted to the footer.
+ * Connection card.
  *
  * It is the one thing on the page that proves the whole delivery path in a single
  * request: CloudFront → (proxied) API Gateway → Lambda → DynamoDB. If this is
- * green, every other call on the page has a working chain behind it. It is no
- * longer the main event now that there is an actual game to play.
+ * green, every other call on the game screen has a working chain behind it.
  */
 function ConnectivityCard() {
   const state = useApiHealth();
 
   if (state.kind === 'loading') {
     return (
-      <section className="card narrow-card">
+      <section className="card">
         <h2>链路自检</h2>
         <p className="muted">正在连接 API…</p>
       </section>
@@ -53,7 +73,7 @@ function ConnectivityCard() {
 
   if (state.kind === 'error') {
     return (
-      <section className="card narrow-card boundary">
+      <section className="card boundary">
         <h2>链路自检</h2>
         <div className="status-row">
           <span className="badge badge-err">连接失败</span>
@@ -70,7 +90,7 @@ function ConnectivityCard() {
 
   const { data } = state;
   return (
-    <section className="card narrow-card">
+    <section className="card">
       <h2>链路自检</h2>
       <div className="status-row">
         <span className="badge badge-ok">CloudFront → API → Lambda → DynamoDB 全通</span>
@@ -89,30 +109,61 @@ function ConnectivityCard() {
           <dd>{data.catalogEvents} 个事件</dd>
         </div>
       </dl>
+      <p className="muted small">{data.disclaimer}</p>
     </section>
   );
 }
 
-export default function App() {
+/** The second screen: everything that is context rather than gameplay. */
+function AboutPage() {
   return (
-    <div className="page">
-      <header className="hero">
-        <p className="eyebrow">AWS UG China Challenge · MVP</p>
-        <h1>CancerCare AI Game</h1>
-        <p className="subtitle">生命守护者 · 由 AI Agent 驱动的肿瘤健康照护模拟游戏</p>
-      </header>
-
-      <GameApp />
-
+    <div className="about">
       <ConnectivityCard />
 
-      <section className="card narrow-card boundary">
+      <section className="card boundary">
         <h2>安全边界</h2>
         <p className="muted">
           本游戏仅用于健康教育。不提供医疗诊断、个体治疗方案、药物推荐或生存预测。
           所有病例均为合成病例，不含真实患者资料。任何健康决策请咨询专业医生。
         </p>
       </section>
+
+      <section className="card">
+        <h2>关于本项目</h2>
+        <p className="muted">
+          <strong>是</strong>：健康教育游戏 · 家庭照护模拟训练 · 肿瘤生命周期科普体验 · AI Agent
+          驱动的互动故事。
+        </p>
+        <p className="muted">
+          <strong>不是</strong>：AI 医生 · 癌症预测工具 · 治疗方案推荐系统 · 临床决策辅助系统。
+        </p>
+        <p className="muted small">
+          五阶段照护循环由规则引擎驱动，<strong>完全不依赖任何 LLM</strong>——AI 层不可用时游戏照常可玩。
+          Agent 只负责解释已经发生的后果与结局总结。
+        </p>
+      </section>
+    </div>
+  );
+}
+
+export default function App() {
+  const route = useHashRoute();
+  const onAbout = route === '#/about';
+
+  return (
+    <div className="page">
+      <header className="hero">
+        <div className="hero-text">
+          <p className="eyebrow">AWS UG China Challenge · MVP</p>
+          <h1>CancerCare AI Game</h1>
+          <p className="subtitle">生命守护者 · 由 AI Agent 驱动的肿瘤健康照护模拟游戏</p>
+        </div>
+        <a className="hero-link" href={onAbout ? '#/' : '#/about'}>
+          {onAbout ? '← 回到游戏' : '链路自检与安全边界'}
+        </a>
+      </header>
+
+      {onAbout ? <AboutPage /> : <GameApp />}
 
       <footer className="footer">
         <span>Phase 3 · 游戏由规则引擎驱动，AI 仅作叙事叠加层</span>
