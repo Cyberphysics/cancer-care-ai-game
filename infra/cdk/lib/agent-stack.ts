@@ -35,6 +35,11 @@ export class AgentStack extends cdk.Stack {
 
     const { config, apiKeyParameterName } = props;
 
+    // AgentCore enforces `^[a-zA-Z][a-zA-Z0-9_]{0,47}$`, hence the
+    // transliteration. The runtime's log group is named after it, so the IAM
+    // scope below is derived from the same value.
+    const runtimeName = agentCoreName('game_master');
+
     /* ---------------------------------------------------------------- *
      * Long-term memory
      * ---------------------------------------------------------------- */
@@ -120,12 +125,37 @@ export class AgentStack extends cdk.Stack {
       }),
     );
 
+    // The service sets a resource policy on the runtime's own log group while
+    // creating it, which needs `logs:PutResourcePolicy`. The L2 construct does
+    // not grant it, and its absence surfaces only as an AccessDenied in
+    // CloudTrail during deploy — not as a template error. Scope follows the
+    // documented pattern: log-group:/aws/bedrock-agentcore/runtimes/<agentName>-*
+    role.addToPolicy(
+      new iam.PolicyStatement({
+        sid: 'ManageRuntimeLogGroup',
+        actions: ['logs:PutResourcePolicy'],
+        resources: [
+          cdk.Arn.format(
+            {
+              service: 'logs',
+              resource: 'log-group',
+              resourceName: `/aws/bedrock-agentcore/runtimes/${runtimeName}-*`,
+              // Log group names start with a slash, so the ARN separator has to
+              // be a colon — the default slash form renders `log-group//aws/...`.
+              arnFormat: cdk.ArnFormat.COLON_RESOURCE_NAME,
+            },
+            this,
+          ),
+        ],
+      }),
+    );
+
     /* ---------------------------------------------------------------- *
      * Runtime
      * ---------------------------------------------------------------- */
 
     this.runtime = new agentcore.Runtime(this, 'GameMasterRuntime', {
-      runtimeName: agentCoreName('game_master'),
+      runtimeName,
       description: 'GameMaster agent — narrative layer for CancerCare AI Game',
       executionRole: role,
 

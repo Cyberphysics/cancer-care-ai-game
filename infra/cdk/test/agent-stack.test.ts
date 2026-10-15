@@ -118,6 +118,26 @@ describe('AgentStack', () => {
       expect(JSON.stringify(ssm[0].Resource)).toContain('deepseek-api-key');
     });
 
+    test('can set the resource policy on its own runtime log group', () => {
+      // The service does this while creating the runtime. Without the
+      // permission the deploy still looks fine in the template and only shows
+      // up as an AccessDenied in CloudTrail, so it is worth pinning down.
+      const statements = roleStatements();
+      const putPolicy = statements.filter((s) =>
+        JSON.stringify(s.Action).includes('logs:PutResourcePolicy'),
+      );
+      expect(putPolicy).toHaveLength(1);
+
+      // The ARN is a Fn::Join with the partition as a Ref, so the assertion
+      // targets the literal segments. It is exact rather than a `toContain` on
+      // purpose: a slash-formatted ARN renders `log-group//aws/…`, which still
+      // contains the right prefix but is not a valid log group ARN.
+      const resource = putPolicy[0].Resource as { 'Fn::Join': [string, unknown[]] };
+      expect(resource['Fn::Join'][1].at(-1)).toBe(
+        ':logs:us-east-1:016998011445:log-group:/aws/bedrock-agentcore/runtimes/cancercare_game_mvp_game_master-*',
+      );
+    });
+
     test('grants memory access for long-term preferences', () => {
       const statements = roleStatements();
       const memory = statements.filter((s) =>
