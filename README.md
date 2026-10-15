@@ -4,11 +4,19 @@
 
 > 面向 AWS User Group China Challenge · 基于 Amazon Bedrock AgentCore
 
+![游戏主界面](docs/images/01-play.png)
+
+五阶段照护循环由**纯函数规则引擎**驱动，整场游戏不调用任何模型；AgentCore 的 GameMaster Agent 扮演那个**可选**的叙事层——解释已经发生的后果、并在通关时写一段总结。规则引擎与 LLM 的这条界线，是这个项目全部设计的出发点。
+
+**技术文章**：[用 AWS Bedrock AgentCore 做一个照护模拟小游戏 — 架构选择与九条实战踩坑](docs/ARTICLE.md)
+
 ---
 
-## 当前状态：Phase 3 Stage A — Agent 叙事层 + 最小可玩网页
+## 当前状态：`v0.1` 纯规则引擎版
 
-**打开 CloudFront 域名就能玩完整一轮：创建角色 → 逐题做选择（立刻看到影响与解释）→ 走完五阶段 → 让 Agent 生成结局总结。** 五阶段照护循环由规则引擎驱动，**完全不依赖任何 LLM**；GameMaster Agent 作为**可选叠加层**生成个性化解释与结局总结。
+**打开 CloudFront 域名就能玩完整一轮：创建角色 → 逐题做选择（立刻看到影响与解释）→ 走完五阶段 → 让 Agent 生成结局总结。**
+
+当前版本已打成带注释标签 `v0.1`（`git tag -l` 可见，说明用 `git tag -n99 v0.1`），标记「游戏可完整游玩」这个里程碑——玩家形象、双栏对齐布局、完整的 AI 叙事入口都在内。该标签相对于 ROADMAP 里程碑编号的偏离，见 [docs/ROADMAP.md](docs/ROADMAP.md) 的「标签」一节。
 
 | 已实现 | 尚未实现 |
 |---|---|
@@ -354,7 +362,8 @@ npm run destroy
 | [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) | 架构、Phase 2 请求链路、Phase 3 AgentCore 设计与模型选型 |
 | [docs/DATA-MODEL.md](docs/DATA-MODEL.md) | DynamoDB 单表键模式、GSI、访问模式、乐观锁 |
 | [docs/AGENT-DESIGN.md](docs/AGENT-DESIGN.md) | GameMaster / Medical Education / Care Assistant 三个 Agent |
-| [docs/ROADMAP.md](docs/ROADMAP.md) | Phase 0–5 里程碑与 Git 规范 |
+| [docs/ARTICLE.md](docs/ARTICLE.md) | **技术文章**：架构选择、AgentCore 用法、九条实战踩坑（面向社区投稿） |
+| [docs/ROADMAP.md](docs/ROADMAP.md) | Phase 0–5 里程碑、标签约定与 Git 规范 |
 | [docs/IAM-PERMISSIONS.md](docs/IAM-PERMISSIONS.md) | 部署所需 IAM 权限（现在 vs Phase 3） |
 | [chatgpt-analisys-doc.md](chatgpt-analisys-doc.md) | 原始 GDD（项目输入文档，权威需求来源） |
 
@@ -362,4 +371,6 @@ npm run destroy
 
 ## 许可
 
-MIT
+[MIT](LICENSE) © 2026 Arvid
+
+代码可自由使用、修改与分发。**注意**：仓库中的病例、事件文案与全部健康数据均为**合成内容**，仅用于健康教育演示，不构成任何医疗建议——详见上文「安全边界」。
