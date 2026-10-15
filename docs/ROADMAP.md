@@ -121,7 +121,22 @@ GDD 原定的 Phase 1（初始化 React、初始化 CDK、创建 AWS 资源、�
 2. 执行角色缺 `logs:PutResourcePolicy`，只在部署期以 CloudTrail AccessDenied 现形（CDK L2 不授予）。
    另：处理器传 `runtimeUserId` 时，调用要求的动作是 `InvokeAgentRuntimeForUser` 而非 `InvokeAgentRuntime`。
 
-**退出标准**：一次 Gateway 工具调用能经后端校验后变更状态，并留下可追溯的审计记录
+**Stage B（Gateway 工具面 + 审计轨迹）——按决定跳过，不是待办**
+
+原退出标准是「一次 Gateway 工具调用能经后端校验后变更状态，并留下可追溯的审计记录」。
+做过完整设计后判定：**对 Demo 与文章而言演示价值低，而未知量最集中**。具体理由：
+
+- 工具名分隔符在文档之间自相矛盾（`AGENT-DESIGN.md` 与 `ARCHITECTURE.md` 写双下划线，
+  AWS 样例与打包的 SDK 用三下划线），工具名还不在事件体里而在 client context 中；
+- 响应信封形状（`{content:[…]}` vs `{statusCode, body}`）无法从文档确认；
+- `aws bedrock-agentcore` **没有** `invoke-gateway` 子命令，端到端验证要在脚本里手写 SigV4
+  （动作名 `bedrock-agentcore:InvokeGateway` 已由 CDK L2 的 `GATEWAY_INVOKE_PERMS` 确认）；
+- 收益集中在「架构正确性」而非「看得见的效果」，而当时的瓶颈是**能演示的东西**。
+
+需要时可以按原设计继续：Gateway 用 `agentcore.Gateway` + `addLambdaTarget`，
+**入站认证必须显式传 `GatewayAuthorizer.usingAwsIam()`**——L2 的默认授权器是 Cognito，
+不传会静默建出用户池、资源服务器、客户端与域名。
+`applyValidatedDelta()`（外部提议路径）目前仍**没有调用方**，是这条路径的入口。
 
 **明确不做**：多癌种、多玩家协作
 
@@ -130,6 +145,12 @@ GDD 原定的 Phase 1（初始化 React、初始化 CDK、创建 AWS 资源、�
 ## Phase 4 — 前端
 
 **范围**：首页 · 患者创建 · 游戏界面 · 状态面板 · AI 聊天窗口（GDD §14 Phase 4）
+
+**已做（最小可玩版）**：单页状态机覆盖完整闭环——创建角色 → 逐题选择（立即看到影响与
+解释）→ 五阶段推进 → 完成页时间线 → AI 结局总结。无路由、无独立页面，复用了既有
+`data/stages.ts` 与整套 API。
+
+**未做**：README 所述五个页面的拆分、状态面板的独立视图、AI 对话窗口（当前是「一键点评 / 一键总结」而非多轮对话）。
 
 **退出标准**：五个页面全部接真实 API，可在浏览器完成一次完整游玩
 

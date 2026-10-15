@@ -6,20 +6,21 @@
 
 ---
 
-## 当前状态：Phase 3 Stage A — Agent 叙事层
+## 当前状态：Phase 3 Stage A — Agent 叙事层 + 最小可玩网页
 
-**游戏机制完整可玩（通过 API），并且现在有了 AI 叙事层。** 五阶段照护循环由规则引擎驱动，**完全不依赖任何 LLM**；GameMaster Agent 作为**可选叠加层**生成个性化解释与结局总结。
+**打开 CloudFront 域名就能玩完整一轮：创建角色 → 逐题做选择（立刻看到影响与解释）→ 走完五阶段 → 让 Agent 生成结局总结。** 五阶段照护循环由规则引擎驱动，**完全不依赖任何 LLM**；GameMaster Agent 作为**可选叠加层**生成个性化解释与结局总结。
 
 | 已实现 | 尚未实现 |
 |---|---|
-| 五阶段规则引擎（事件池、选择判定、状态演进） | 前端游戏界面（Phase 4） |
-| HTTP API 9 条路由全部真实实现 | AgentCore Gateway（Phase 3 Stage B） |
-| DynamoDB 单表 + 稀疏 GSI + 四项原子事务 | 玩家鉴权 |
-| 双乐观锁 + 幂等提交保护 | 多癌种、成就系统 |
+| 五阶段规则引擎（事件池、选择判定、状态演进） | 完整五页面前端（Phase 4 全量） |
+| HTTP API 9 条路由全部真实实现 | AgentCore Gateway 工具面（**按决定跳过**，理由见 ROADMAP） |
+| 最小可玩网页（单页状态机，无路由） | 玩家鉴权 |
+| DynamoDB 单表 + 稀疏 GSI + 四项原子事务 | 多癌种、成就系统 |
+| 双乐观锁 + 幂等提交保护 | 审计轨迹（原属 Stage B） |
 | AgentCore Runtime + Memory，`deepseek` 与 `bedrock` 可插拔 provider | |
 | 内容护栏（概念可讲、处方禁止）+ 后端二次校验 | |
 | S3 + CloudFront（OAC）+ `/api/*` 反代 | |
-| 104 条 TS 测试 + 38 条 Python 测试 + 端到端冒烟脚本（42 项） | |
+| 104 条 TS 测试 + 38 条 Python 测试 + 端到端冒烟脚本（60 项，含 AI 叙事层） | |
 
 > ⚠️ **部署前需完成两项一次性准备**（AgentCore IAM 权限 + DeepSeek key 写入 SSM），
 > 详见 **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) §1**。缺少任一项时 Agent 栈无法部署。
@@ -27,8 +28,10 @@
 ### 快速试玩
 
 ```bash
-./scripts/smoke.sh --full   # 完整通关一遍五阶段流程，并校验落库结果
+./scripts/smoke.sh --full   # 端到端冒烟：基础设施 + 完整通关 + AI 叙事层
 ```
+
+**背景与设计要点**见 [docs/ARTICLE.md](docs/ARTICLE.md)（以本项目为例讲 AWS 架构与实战踩坑）。
 
 ---
 
@@ -322,9 +325,10 @@ npm run destroy
 
 ## 已知限制
 
-- API **无鉴权**，任何持有 URL 的人都能调用（Phase 3 计划引入 Cognito + JWT）
-- API 自身的 CORS 仍允许任意来源 `*`。经 CloudFront 访问时是同源、不涉及 CORS；这一项只在直接调用 API Gateway 时生效（Phase 3 一并收敛）
-- 前端是占位页，只做连通性检查，**没有游戏界面**（Phase 4）
+- API **无鉴权**，任何持有 URL 的人都能调用（引入 Cognito + JWT 属于未做的部分）
+- API 自身的 CORS 仍允许任意来源 `*`。经 CloudFront 访问时是同源、不涉及 CORS；这一项只在直接调用 API Gateway 时生效
+- **前端是最小可玩版**：单页状态机，没有路由、没有「首页 / 患者创建」等独立页面（Phase 4 全量仍未做）
+- **AI 点评按会话缓存**：缓存键是 `(sessionId, kind)`，所以同一会话内「choice 点评」只会真正生成一次，之后返回同一段文字；界面用 `cached` 徽标如实标注，不假装是新的点评
 - 未配置自定义域名与 ACM 证书，直接使用 `*.cloudfront.net`
 - 无 CI/CD 流水线
 - **Bedrock 不可用**：账号被 bedrock-allowlisting 阻断，Phase 3 的前置阻塞项，详见 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) §6.3
