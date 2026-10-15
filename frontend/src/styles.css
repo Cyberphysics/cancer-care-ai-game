@@ -45,37 +45,16 @@ body {
   gap: 1rem;
 }
 
-/* The second screen is prose, not a dashboard: at the play layout's full width
-   its lines would run to ~1000px. */
-.about {
+/* Below the fold: prose, not a dashboard, so it is held to a readable measure
+   rather than the play layout's full width. */
+.page-footer {
   display: flex;
   flex-direction: column;
   gap: 1rem;
   max-width: 620px;
   width: 100%;
   margin-inline: auto;
-}
-
-.hero {
-  display: flex;
-  align-items: flex-end;
-  justify-content: space-between;
-  gap: 1rem;
-  flex-wrap: wrap;
-}
-
-.hero-link {
-  color: var(--muted);
-  font-size: 0.85rem;
-  text-decoration: none;
-  border-bottom: 1px solid transparent;
-  padding-bottom: 0.15rem;
-  white-space: nowrap;
-}
-
-.hero-link:hover {
-  color: var(--accent);
-  border-bottom-color: var(--accent);
+  margin-top: 0.5rem;
 }
 
 .hero h1 {
