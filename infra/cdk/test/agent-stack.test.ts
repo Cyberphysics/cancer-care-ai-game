@@ -1,17 +1,18 @@
 import * as cdk from 'aws-cdk-lib';
 import { Match, Template } from 'aws-cdk-lib/assertions';
 import { AgentStack } from '../lib/agent-stack';
+import { AppConfig } from '../lib/config';
 import { testConfig, testEnv } from './helpers';
 
 // NOTE: the stack reads `agents/game-master/dist/game-master.zip` via
 // `fromCodeAsset`, which CDK validates at synth time. Run
 // `./agents/game-master/build.sh` before `npm test`.
-function buildTemplate(): Template {
+function buildTemplate(overrides: Partial<AppConfig> = {}): Template {
   const app = new cdk.App();
   return Template.fromStack(
     new AgentStack(app, 'TestAgentStack', {
       env: testEnv(),
-      config: testConfig(),
+      config: testConfig(overrides),
       apiKeyParameterName: '/cancercare-game-mvp/deepseek-api-key',
     }),
   );
@@ -42,6 +43,23 @@ describe('AgentStack', () => {
     const runtimes = template.findResources('AWS::BedrockAgentCore::Runtime');
     const [runtime] = Object.values(runtimes);
     expect(JSON.stringify(runtime.Properties.NetworkConfiguration)).toContain('PUBLIC');
+  });
+
+  test('does not deliver traces to CloudWatch Logs by default', () => {
+    // Trace delivery is rejected at deploy time with `InvalidRequest` unless the
+    // *account's* X-Ray trace segment destination is already CloudWatchLogs, and
+    // that setting is account-wide. Leaving this on would fail the whole stack
+    // for a feature nobody asked for, so the default is off.
+    template.resourceCountIs('AWS::Logs::Delivery', 0);
+    template.resourceCountIs('AWS::Logs::DeliverySource', 0);
+  });
+
+  test('wires up trace delivery when explicitly enabled', () => {
+    // The flag is not dead code: with it on, the delivery resources appear.
+    // They are what fails without the account-level setting — see config.ts.
+    const traced = buildTemplate({ agentTracing: true });
+    traced.resourceCountIs('AWS::Logs::Delivery', 1);
+    traced.resourceCountIs('AWS::Logs::DeliverySource', 1);
   });
 
   test('names satisfy the AgentCore charset — no hyphens', () => {

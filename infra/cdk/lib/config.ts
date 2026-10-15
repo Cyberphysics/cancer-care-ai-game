@@ -43,6 +43,20 @@ export interface AppConfig {
   readonly autoDeleteObjects: boolean;
   readonly pointInTimeRecovery: boolean;
   readonly logRetention: logs.RetentionDays;
+  /**
+   * Whether the AgentCore Runtime should deliver X-Ray traces to CloudWatch Logs.
+   *
+   * Off by default: the delivery requires the *account-level* trace segment
+   * destination to be `CloudWatchLogs`, which is set with
+   * `aws xray update-trace-segment-destination`. That call is account-wide — it
+   * would move the traces of every other project in the account too — so it is
+   * not something this stack may assume. Enabling this flag without making that
+   * account change first fails the stack with `InvalidRequest` on the
+   * `AWS::Logs::Delivery` resource.
+   *
+   * Opt in per deploy with `-c agentTracing=true` once the account is ready.
+   */
+  readonly agentTracing: boolean;
   readonly tags: { readonly [key: string]: string };
 }
 
@@ -74,6 +88,7 @@ export function loadConfig(app: cdk.App): AppConfig {
     autoDeleteObjects: !isProd,
     pointInTimeRecovery: true,
     logRetention: isProd ? logs.RetentionDays.ONE_MONTH : logs.RetentionDays.ONE_WEEK,
+    agentTracing: app.node.tryGetContext('agentTracing') === 'true',
     tags: {
       Project: 'CancerCareAIGame',
       Stage: stage,

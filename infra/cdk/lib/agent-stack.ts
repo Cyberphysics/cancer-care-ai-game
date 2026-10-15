@@ -145,7 +145,12 @@ export class AgentStack extends cdk.Stack {
       // and the caller is a Lambda in the same account.
       authorizerConfiguration: agentcore.RuntimeAuthorizerConfiguration.usingIAM(),
 
-      tracingEnabled: true,
+      // Trace delivery lands in CloudWatch Logs, which only works when the
+      // account's X-Ray trace segment destination has been switched to
+      // CloudWatchLogs. That switch is account-wide and would move every other
+      // project's traces as well, so it is gated behind config.agentTracing
+      // (default off) rather than assumed. See the AppConfig comment.
+      tracingEnabled: config.agentTracing,
 
       environmentVariables: {
         MODEL_PROVIDER: 'deepseek',

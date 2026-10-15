@@ -17,6 +17,7 @@ export function testConfig(overrides: Partial<AppConfig> = {}): AppConfig {
     autoDeleteObjects: true,
     pointInTimeRecovery: true,
     logRetention: logs.RetentionDays.ONE_WEEK,
+    agentTracing: false,
     tags: { Project: 'CancerCareAIGame', Stage: 'dev' },
     ...overrides,
   };
