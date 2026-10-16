@@ -49,6 +49,16 @@ SAFE_FALLBACK = (
 )
 
 
+#: Used when an answer fails the guard. `SAFE_FALLBACK` above closes out a game
+#: session, which would be a non-answer for someone who asked about a concept;
+#: this one says plainly what happened and what they can do instead.
+QUESTION_FALLBACK = (
+    "抱歉，这个问题的回答没有通过内容安全检查，所以我没有把它给你。"
+    "可以换个说法再问一次，或者把这个疑问记下来，就诊时请医生解答。"
+    "本内容仅用于健康教育，不构成任何诊断或治疗建议。"
+)
+
+
 def find_violations(text: str) -> list[str]:
     """Return the labels of every rule the text breaks. Empty means clean."""
     return [rule.label for rule in RULES if rule.pattern.search(text)]

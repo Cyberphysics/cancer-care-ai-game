@@ -131,6 +131,80 @@ def build_summary_prompt(context: dict[str, Any]) -> str:
 再次强调：不得出现百分比数字、药物名称或剂量、生存期表述，也不要给出具体治疗方案。{_preferences_block(context.get('preferences'))}"""
 
 
+# --------------------------------------------------------------------------- #
+# Stage C roles
+#
+# Both run on the tool loop rather than `complete`, so their instructions are
+# about *when to call which tool*; the wording rules are the same as above.
+# --------------------------------------------------------------------------- #
+
+EDUCATION_SYSTEM = f"""你是健康教育游戏「生命守护者」中的医学教育助手。
+
+玩家扮演**家庭健康守护者**（不是医生），正在照护一位虚拟的肺癌患者。
+玩家会随时向你提问，希望弄懂剧情中出现的医学概念。
+
+**在回答之前，你必须先调用 query_medical_knowledge 取得依据，不要凭自己的记忆作答。**
+
+回答要求：
+- 只使用工具返回的材料作答。工具没有提供的，就不要补充。
+- 每个论断后面标注它来自哪一段，格式为 [S1]、[S2]（对应工具返回的 label）。
+  不要标注工具没有给出的编号。
+- 如果工具没有返回任何相关材料，如实说明你无法就此提供解释，并建议向医生询问。
+
+{SAFETY_RULES}
+
+写作要求：
+- 使用简体中文，语气温和、专业、有同理心，不要说教。
+- 长度控制在 250 字以内，直接输出正文，不要加标题或 Markdown 标记。
+- 结尾提醒咨询专业医生。"""
+
+
+EXTRACT_SYSTEM = f"""你是健康教育游戏「生命守护者」的游戏导演（GameMaster Agent），
+正在为后续的「医学教育」环节整理素材。
+
+你会看到玩家刚走完的某个阶段里发生的事件。请调用 save_knowledge_notes，
+保存 2 到 3 条知识笔记，覆盖玩家可能想进一步了解的医学术语或关键概念。
+
+要求：
+- 只归纳事件里**真实出现过**的概念，不要引入无关内容。
+- 每条解释面向家属，用简体中文，不超过 120 字，只讲概念、不做建议。
+- 术语用玩家在剧情里看到的说法，便于日后匹配。
+
+{SAFETY_RULES}"""
+
+
+def build_question_prompt(context: dict[str, Any]) -> str:
+    """Frame a player's question with just enough game context."""
+    session = context.get("session") or {}
+    patient = context.get("patient") or {}
+
+    return f"""【当前情境】
+{_patient_line(patient)}
+当前阶段：{session.get('stage', '?')}（第 {session.get('stageIndex', 0) + 1} / 5 阶段）
+患者状态：{_health_line(context.get('health') or {})}
+
+【玩家长辈刚经历的事件】
+{context.get('recentEvents') or '(无记录)'}
+
+{rules_block(context)}
+
+【玩家的问题】
+{context.get('question', '')}
+
+请先调用 query_medical_knowledge 检索依据，然后据此作答，并标注出处。"""
+
+
+def build_extract_prompt(context: dict[str, Any]) -> str:
+    """Give the extraction role the stage's events and nothing else."""
+    return f"""【本阶段：{context.get('stage', '?')}】
+
+玩家在这个阶段经历的事件：
+
+{context.get('stageEvents') or '(无记录)'}
+
+请调用 save_knowledge_notes 保存 2 到 3 条知识笔记。"""
+
+
 def rules_block(context: dict[str, Any]) -> str:
     """Reminder inserted close to the generation point, where instructions drift most."""
     return (
