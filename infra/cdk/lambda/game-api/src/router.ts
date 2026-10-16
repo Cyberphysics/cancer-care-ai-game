@@ -11,8 +11,10 @@ import {
   handleGetPlayer,
   handleGetSession,
   handleHealth,
+  handleKnowledge,
   handleListEvents,
   handleNarration,
+  handleQuestion,
   handleSubmitChoice,
 } from './handlers';
 import {
@@ -67,6 +69,20 @@ const ROUTES: readonly RouteDefinition[] = [
     method: 'POST',
     pattern: '/api/v1/sessions/{sessionId}/narration',
     handler: handleNarration,
+  },
+  {
+    // Ask the Medical Education role a question. Not cached: unlike narration
+    // this is a deliberate player action rather than something on a routine path.
+    method: 'POST',
+    pattern: '/api/v1/sessions/{sessionId}/questions',
+    handler: handleQuestion,
+  },
+  {
+    // Derive knowledge notes for a stage. Called by the client *after* advancing,
+    // never by `/advance` itself — the game loop must not depend on the agent.
+    method: 'POST',
+    pattern: '/api/v1/sessions/{sessionId}/knowledge',
+    handler: handleKnowledge,
   },
 ];
 

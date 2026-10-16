@@ -1,4 +1,11 @@
-import { AgentUnavailableError, invokeGameMaster, type NarrationRequest } from './agent';
+import {
+  AgentUnavailableError,
+  invokeAgent,
+  type AnswerResult,
+  type ExtractResult,
+  type NarrationRequest,
+  type NarrationResult,
+} from './agent';
 import { DISCLAIMER, EVENT_CATALOG } from './content/events';
 import {
   DEFAULT_PATIENT_TEMPLATE_ID,
@@ -43,10 +50,12 @@ import type {
   PatientTemplate,
   SessionItem,
   SessionResponse,
+  StageKey,
   SubmitChoiceRequest,
   SubmitChoiceResponse,
 } from './types';
 import { STAGE_ORDER } from './types';
+import { buildExtractRequest, buildQuestionRequest, toNarrationEvent } from './payloads';
 import { badGateway, badRequest, conflict, created, notFound, ok } from './responses';
 
 /** Demo sessions expire on their own; the table's TTL attribute consumes this. */
@@ -543,18 +552,6 @@ export async function handleAdvance(event: HttpApiEvent) {
  * Agent narration
  * ------------------------------------------------------------------ */
 
-/** Trim an event down to what the model needs — no ids, no bookkeeping. */
-function toNarrationEvent(item: EventItem) {
-  const chosenText =
-    item.choices.find((choice) => choice.id === item.chosenChoiceId)?.text ?? '(未记录)';
-  return {
-    stage: item.stage,
-    title: item.title,
-    chosenChoiceText: chosenText,
-    impact: item.impact,
-  };
-}
-
 /**
  * Generate (or return cached) agent narration for a session.
  *
@@ -618,9 +615,9 @@ export async function handleNarration(event: HttpApiEvent) {
     ...(kind === 'choice' ? { focusEvent: toNarrationEvent(answered[answered.length - 1]) } : {}),
   };
 
-  let result;
+  let result: NarrationResult;
   try {
-    result = await invokeGameMaster(request);
+    result = await invokeAgent<NarrationResult>(request);
   } catch (err) {
     if (err instanceof AgentUnavailableError) {
       return badGateway(`Agent 不可用：${err.message}`);
@@ -668,6 +665,128 @@ export async function handleNarration(event: HttpApiEvent) {
     degraded,
     generatedAt,
     cached: false,
+  });
+}
+
+/* ------------------------------------------------------------------ *
+ * Stage C roles: Medical Education and knowledge extraction
+ * ------------------------------------------------------------------ */
+
+/** How much of the timeline the question role sees. Enough for context, not a transcript. */
+const RECENT_EVENTS_FOR_CONTEXT = 6;
+
+/**
+ * Answer a player's question (the Medical Education role).
+ *
+ * Deliberately **not cached**, unlike narration. Narration is generated once per
+ * session because it sits in the path of a routine action; a question is a
+ * deliberate act, and caching it would need a cache keyed by question text and
+ * would re-introduce the "cached" badge semantics for no gain.
+ */
+export async function handleQuestion(event: HttpApiEvent) {
+  const sessionId = event.pathParameters?.sessionId;
+  if (!sessionId) return badRequest('Missing path parameter "sessionId"');
+
+  const parsed = parseJsonBody<{ question?: unknown }>(event);
+  if (!parsed.ok) return badRequest(parsed.error);
+
+  const question = typeof parsed.value.question === 'string' ? parsed.value.question.trim() : '';
+  if (!question) return badRequest('Field "question" is required and must be a non-empty string');
+
+  const session = await getSession(sessionId);
+  if (!session) return notFound(`Session ${sessionId} not found`);
+
+  const patientItem = (await getItemAt(patientKey(sessionId, session.patientId))) as
+    | PatientItem
+    | undefined;
+  if (!patientItem) return notFound(`Patient state for session ${sessionId} not found`);
+
+  const answered = (await listEvents(sessionId)).filter((item) => item.chosenChoiceId);
+  const request = buildQuestionRequest({
+    session,
+    patient: patientItem,
+    recentEvents: answered.slice(-RECENT_EVENTS_FOR_CONTEXT),
+    question,
+  });
+
+  let result: AnswerResult;
+  try {
+    result = await invokeAgent<AnswerResult>(request);
+  } catch (err) {
+    if (err instanceof AgentUnavailableError) {
+      return badGateway(`Agent 不可用：${err.message}`);
+    }
+    throw err;
+  }
+
+  if (!result.ok || !result.text) {
+    return badGateway(`Agent 生成失败：${result.error ?? 'unknown error'}`, {
+      errorType: result.errorType,
+    });
+  }
+
+  // Second line of defence. The agent guards its own output, including dropping
+  // citations it invented; the backend does not take that on trust.
+  const { text, degraded } = sanitize(result.text);
+
+  return ok({
+    text,
+    kind: 'question',
+    citations: result.citations ?? [],
+    degraded: degraded || (result.degraded ?? false),
+    provider: result.provider,
+    modelId: result.modelId,
+    generatedAt: result.generatedAt ?? nowIso(),
+  });
+}
+
+/**
+ * Derive and store knowledge notes for a stage (the GameMaster extraction role).
+ *
+ * Called by the client after `/advance`, never by `/advance` itself: advancing
+ * must stay fast and must not depend on the agent. A missed call degrades to
+ * "corpus only, no session notes", which is a worse answer rather than a broken
+ * game.
+ */
+export async function handleKnowledge(event: HttpApiEvent) {
+  const sessionId = event.pathParameters?.sessionId;
+  if (!sessionId) return badRequest('Missing path parameter "sessionId"');
+
+  const parsed = parseJsonBody<{ stage?: unknown }>(event);
+  if (!parsed.ok) return badRequest(parsed.error);
+
+  const { stage } = parsed.value;
+  if (typeof stage !== 'string' || !(STAGE_ORDER as readonly string[]).includes(stage)) {
+    return badRequest(`Field "stage" must be one of: ${STAGE_ORDER.join(', ')}`);
+  }
+
+  const session = await getSession(sessionId);
+  if (!session) return notFound(`Session ${sessionId} not found`);
+
+  const stageEvents = (await listEvents(sessionId)).filter((item) => item.stage === stage);
+  const request = buildExtractRequest({ session, stage: stage as StageKey, stageEvents });
+
+  let result: ExtractResult;
+  try {
+    result = await invokeAgent<ExtractResult>(request);
+  } catch (err) {
+    if (err instanceof AgentUnavailableError) {
+      return badGateway(`Agent 不可用：${err.message}`);
+    }
+    throw err;
+  }
+
+  if (!result.ok) {
+    return badGateway(`Agent 抽取失败：${result.error ?? 'unknown error'}`, {
+      errorType: result.errorType,
+    });
+  }
+
+  return ok({
+    stage,
+    stored: result.stored ?? 0,
+    memoryConfigured: result.memoryConfigured ?? false,
+    generatedAt: result.generatedAt ?? nowIso(),
   });
 }
 

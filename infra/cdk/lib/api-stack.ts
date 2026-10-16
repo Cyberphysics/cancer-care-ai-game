@@ -154,6 +154,17 @@ export class ApiStack extends cdk.Stack {
         path: `${API_PREFIX}/sessions/{sessionId}/narration`,
         methods: [apigatewayv2.HttpMethod.POST],
       },
+      {
+        // Stage C: the Medical Education role.
+        path: `${API_PREFIX}/sessions/{sessionId}/questions`,
+        methods: [apigatewayv2.HttpMethod.POST],
+      },
+      {
+        // Stage C: the GameMaster extraction role. Client-triggered so that
+        // `/advance` stays fast and agent-independent.
+        path: `${API_PREFIX}/sessions/{sessionId}/knowledge`,
+        methods: [apigatewayv2.HttpMethod.POST],
+      },
     ];
 
     for (const route of routes) {

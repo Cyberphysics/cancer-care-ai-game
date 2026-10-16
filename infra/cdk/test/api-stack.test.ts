@@ -31,9 +31,9 @@ describe('ApiStack', () => {
     });
   });
 
-  test('exposes every game-loop route plus the AI narration route', () => {
+  test('exposes every game-loop route plus the agent routes', () => {
     template.resourceCountIs('AWS::ApiGatewayV2::Api', 1);
-    template.resourceCountIs('AWS::ApiGatewayV2::Route', 9);
+    template.resourceCountIs('AWS::ApiGatewayV2::Route', 11);
 
     for (const route of [
       'GET /api/v1/health',
@@ -45,6 +45,8 @@ describe('ApiStack', () => {
       'POST /api/v1/sessions/{sessionId}/choices',
       'POST /api/v1/sessions/{sessionId}/advance',
       'POST /api/v1/sessions/{sessionId}/narration',
+      'POST /api/v1/sessions/{sessionId}/questions',
+      'POST /api/v1/sessions/{sessionId}/knowledge',
     ]) {
       const [method, path] = route.split(' ');
       template.hasResourceProperties('AWS::ApiGatewayV2::Route', {
