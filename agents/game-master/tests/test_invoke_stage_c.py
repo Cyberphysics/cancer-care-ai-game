@@ -222,6 +222,72 @@ def test_extract_tolerates_a_stage_with_nothing_to_note(monkeypatch):
     assert result["stored"] == 0
 
 
+def test_extract_is_safe_to_run_twice_for_the_same_stage(monkeypatch):
+    # Memory's create_event only appends, and a client retry after a timeout is a
+    # realistic duplicate. Without dedup a second call duplicates every note.
+    written: list[list[dict]] = []
+    on_record: list[dict] = []
+
+    def fake_write(_settings, _player, _session, _stage, notes):
+        written.append(notes)
+        on_record.extend(notes)
+        return len(notes)
+
+    monkeypatch.setattr(agent_main, "write_knowledge_notes", fake_write)
+    monkeypatch.setattr(agent_main, "read_knowledge_notes", lambda *a, **k: list(on_record))
+    monkeypatch.setattr(
+        agent_main,
+        "build_provider",
+        lambda _settings: ScriptedProvider(
+            extract_script([{"term": "活检", "explanation": "取一小块组织做病理检查。"}])
+        ),
+    )
+
+    body = {"kind": "extract", "stage": "screening", "playerId": "p1", "sessionId": "s1"}
+    first = agent_main.invoke(dict(body))
+    second = agent_main.invoke(dict(body))
+
+    assert first["stored"] == 1
+    assert second["stored"] == 0  # nothing new to add
+    assert flattened(written) == ["活检"]
+
+
+def test_extract_still_adds_a_genuinely_new_term(monkeypatch):
+    written: list[list[dict]] = []
+    on_record: list[dict] = [{"term": "活检", "explanation": "已有。"}]
+
+    def fake_write(_settings, _player, _session, _stage, notes):
+        written.append(notes)
+        on_record.extend(notes)
+        return len(notes)
+
+    monkeypatch.setattr(agent_main, "write_knowledge_notes", fake_write)
+    monkeypatch.setattr(agent_main, "read_knowledge_notes", lambda *a, **k: list(on_record))
+    monkeypatch.setattr(
+        agent_main,
+        "build_provider",
+        lambda _settings: ScriptedProvider(
+            extract_script(
+                [
+                    {"term": "活检", "explanation": "重复的术语。"},
+                    {"term": "低剂量螺旋 CT", "explanation": "新的术语。"},
+                ]
+            )
+        ),
+    )
+
+    result = agent_main.invoke(
+        {"kind": "extract", "stage": "screening", "playerId": "p1", "sessionId": "s1"}
+    )
+
+    assert result["stored"] == 1
+    assert flattened(written) == ["低剂量螺旋 CT"]
+
+
+def flattened(batches: list[list[dict]]) -> list[str]:
+    return [note["term"] for batch in batches for note in batch]
+
+
 @pytest.mark.parametrize("kind", ["question", "extract"])
 def test_the_stage_c_roles_always_return_json_serialisable_dicts(monkeypatch, kind):
     body = {"kind": kind, "stage": "screening", "question": QUESTION, "playerId": "p1", "sessionId": "s1"}
