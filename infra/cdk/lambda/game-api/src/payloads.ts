@@ -75,13 +75,21 @@ export function buildExtractRequest(input: {
   readonly stage: ExtractRequest['stage'];
   readonly stageEvents: readonly EventItem[];
 }): ExtractRequest {
+  // Unanswered events are excluded: a choice the player has not made yet has no
+  // impact to explain, and including it invites the model to invent one.
+  const answered = input.stageEvents.filter((item) => item.chosenChoiceId);
+
   return {
     kind: 'extract',
     playerId: input.session.playerId,
     sessionId: input.session.sessionId,
     stage: input.stage,
-    // Unanswered events are excluded: a choice the player has not made yet has
-    // no impact to explain, and including it invites the model to invent one.
-    stageEvents: formatEventLines(input.stageEvents.filter((item) => item.chosenChoiceId)),
+    stageEvents: formatEventLines(answered),
+    // The exact strings that appeared, unstructured. The agent uses them to
+    // refuse a player's own action as a "medical concept" — measured on the
+    // deployed agent, it otherwise stores choice text like
+    // 「戒烟与活动计划，分阶段执行」 verbatim, and those dilute the pool a
+    // citation is later drawn from.
+    stageEventTexts: answered.flatMap((item) => [item.title, chosenText(item)]),
   };
 }

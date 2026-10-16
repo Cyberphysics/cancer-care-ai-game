@@ -322,7 +322,9 @@ def _extract_notes(body: dict[str, Any], player_id: str, session_id: str) -> dic
             EXTRACT_SYSTEM,
             [ChatMessage(role="user", content=build_extract_prompt(body))],
             [NOTE_TOOL],
-            note_handlers(writer),
+            # The stage's own event text is the reference for "that is not a
+            # concept, that is what happened".
+            note_handlers(writer, body.get("stageEventTexts") or []),
             Deadline(AGENT_DEADLINE_SECONDS),
             forced_tool=NOTE_TOOL.name,
             # A stage with nothing new in it legitimately yields no notes, unlike

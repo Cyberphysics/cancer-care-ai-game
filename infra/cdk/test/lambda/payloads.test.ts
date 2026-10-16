@@ -157,6 +157,36 @@ describe('buildExtractRequest', () => {
   test('says so explicitly when a stage produced nothing', () => {
     const request = buildExtractRequest({ session, stage: 'recovery', stageEvents: [] });
     expect(request.stageEvents).toBe('(无记录)');
+    expect(request.stageEventTexts).toEqual([]);
+  });
+
+  test('lists the exact strings that appeared, so a concept gate has a reference', () => {
+    const event = answeredEvent(1, 0);
+    const request = buildExtractRequest({ session, stage: 'screening', stageEvents: [event] });
+
+    // The title and the chosen option. The agent compares proposed note terms
+    // against these — measured on the deployed agent, it otherwise stores choice
+    // text verbatim as a "medical concept".
+    expect(request.stageEventTexts).toHaveLength(2);
+    expect(request.stageEventTexts).toContain(event.title);
+  });
+
+  test('leaves unanswered events out of the concept reference too', () => {
+    const unanswered = buildEventItem(
+      eventsForStage(EVENT_CATALOG, 'screening')[1],
+      SESSION_ID,
+      'evt_future',
+      NOW,
+      TTL,
+    );
+    const request = buildExtractRequest({
+      session,
+      stage: 'screening',
+      stageEvents: [answeredEvent(1, 0), unanswered],
+    });
+
+    expect(request.stageEventTexts).not.toContain(unanswered.title);
+    expect(request.stageEventTexts).toHaveLength(2);
   });
 
   test('never leaks the answer key', () => {

@@ -62,6 +62,12 @@ export interface ExtractRequest {
   readonly sessionId: string;
   readonly stage: string;
   readonly stageEvents: string;
+  /**
+   * The stage's event titles and chosen options, verbatim and unstructured. The
+   * agent compares proposed note terms against these so a player's own action
+   * cannot be filed as a medical concept.
+   */
+  readonly stageEventTexts: readonly string[];
 }
 
 export type AgentRequest = NarrationRequest | QuestionRequest | ExtractRequest;

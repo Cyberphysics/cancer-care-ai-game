@@ -16,7 +16,8 @@ rewriting the handlers.
 from __future__ import annotations
 
 import logging
-from typing import Any, Callable
+import re
+from typing import Any, Callable, Sequence
 
 from .corpus import DEFAULT_TOP_K, KnowledgeEntry, normalise, search
 from .provider import ToolSpec
@@ -70,8 +71,8 @@ KNOWLEDGE_TOOL = ToolSpec(
 NOTE_TOOL = ToolSpec(
     name="save_knowledge_notes",
     description=(
-        "把剧情中出现的医学术语、关键选择或常见问答归纳成知识笔记并保存，"
-        "供后续的医学教育环节查阅。"
+        "把剧情中出现的**医学或健康概念**归纳成知识笔记并保存，供后续的医学教育环节查阅。"
+        "保存的应当是一个能回答「这是什么」的概念，而不是剧情的标题或玩家的选项原文。"
     ),
     parameters={
         "type": "object",
@@ -168,8 +169,69 @@ def query_medical_knowledge(
     return {"passages": passages, "sources": sources}
 
 
-def split_notes(notes: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
-    """Split proposed notes into (accepted, rejected) by the content guard.
+#: Characters that carry no meaning when comparing two terms. Chinese has no
+#: spaces, and the model varies punctuation freely between turns.
+_FOLD_DROP = re.compile(r"[\s，。、（）()「」【】:：;；·\-—_/,.]")
+
+
+def fold(text: str) -> str:
+    """Normalise a term for comparison."""
+    return _FOLD_DROP.sub("", text.strip().lower())
+
+
+#: Below this length a substring match is too weak to act on — 化疗 vs 化疗与放疗
+#: are two concepts, and collapsing them would silently drop one.
+MIN_CONTAINMENT_LENGTH = 3
+
+
+def echoes_event_text(term: str, event_texts: Sequence[str]) -> bool:
+    """True when a "term" is just an event title or a choice the player made.
+
+    Measured against the deployed agent: without this the model happily stored
+    「戒烟与活动计划，分阶段执行」 — a choice's own wording — as a knowledge note.
+    Those are not concepts anything can explain, and they dilute the pool a
+    citation is later drawn from.
+
+    Equality only, not containment: 「低剂量螺旋 CT」 is a real concept that also
+    appears inside a longer choice text, and rejecting it would be wrong.
+    """
+    folded = fold(term)
+    if not folded:
+        return False
+    return any(folded == fold(text) for text in event_texts if text)
+
+
+def is_near_duplicate(term: str, accepted: Sequence[str]) -> bool:
+    """True when this term repeats one already accepted in the same call.
+
+    One live stage produced four phrasings of the same idea (戒烟与活动计划，
+    分阶段执行 / 戒烟与活动计划（分阶段执行） / 和家人一起制定计划 / 和家人一起
+    制定健康计划). They are one concept, and the near-variants differ only in
+    punctuation or wording.
+    """
+    folded = fold(term)
+    if not folded:
+        return True
+    for other in accepted:
+        other_folded = fold(other)
+        if not other_folded:
+            continue
+        if folded == other_folded:
+            return True
+        shorter, longer = sorted((folded, other_folded), key=len)
+        if len(shorter) >= MIN_CONTAINMENT_LENGTH and shorter in longer:
+            return True
+    return False
+
+
+def split_notes(
+    notes: Any,
+    event_texts: Sequence[str] = (),
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Split proposed notes into (accepted, rejected).
+
+    Three gates, in order: the content guard, the "that is not a concept" check
+    against the stage's own event text, and a near-duplicate collapse.
 
     Notes are persisted and later cited verbatim, so they are held to the same
     standard as an answer. Rejecting rather than repairing: this repo's guards
@@ -191,6 +253,12 @@ def split_notes(notes: Any) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]
         violations = find_violations(f"{term} {explanation}")
         if violations:
             rejected.append({"term": term, "violations": violations})
+            continue
+        if echoes_event_text(term, event_texts):
+            rejected.append({"term": term, "reason": "not_a_concept"})
+            continue
+        if is_near_duplicate(term, [note["term"] for note in accepted]):
+            rejected.append({"term": term, "reason": "duplicate"})
             continue
         accepted.append({"term": term, "explanation": explanation})
 
@@ -219,16 +287,23 @@ def knowledge_handlers(
     return {KNOWLEDGE_TOOL.name: query}
 
 
-def note_handlers(write_notes: NoteWriter) -> dict[str, Handler]:
-    """Handlers for the GameMaster extraction role."""
+def note_handlers(
+    write_notes: NoteWriter,
+    event_texts: Sequence[str] = (),
+) -> dict[str, Handler]:
+    """Handlers for the GameMaster extraction role.
+
+    `event_texts` are the stage's own event titles and chosen options. They are
+    the reference for "this is not a concept, it is what happened".
+    """
 
     def save(arguments: dict[str, Any]) -> dict[str, Any]:
-        accepted, rejected = split_notes(arguments.get("notes"))
+        accepted, rejected = split_notes(arguments.get("notes"), event_texts)
         if rejected:
             # Feedback the model can act on in a later turn. The two-call loop
             # has no such turn, so a rejected note is simply dropped here — said
             # plainly rather than hidden.
-            logger.warning("guard rejected %d knowledge note(s): %s", len(rejected), rejected)
+            logger.warning("rejected %d knowledge note(s): %s", len(rejected), rejected)
         stored = write_notes(accepted) if accepted else 0
         result: dict[str, Any] = {"stored": stored, "accepted": len(accepted)}
         if rejected:

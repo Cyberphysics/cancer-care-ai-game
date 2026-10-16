@@ -12,6 +12,7 @@ from app.tools import (
     MAX_SESSION_NOTES,
     NOTE_TOOL,
     SESSION_NOTE_SOURCE,
+    fold,
     knowledge_handlers,
     matching_session_notes,
     note_handlers,
@@ -145,6 +146,97 @@ def test_malformed_notes_are_skipped_without_crashing():
 def test_a_non_list_argument_is_handled():
     assert split_notes(None) == ([], [])
     assert split_notes({"term": "活检"}) == ([], [])
+
+
+# --------------------------------------------------------------------------- #
+# "that is not a concept, that is what happened"
+# --------------------------------------------------------------------------- #
+
+
+def test_a_term_that_is_the_event_title_is_rejected():
+    accepted, rejected = split_notes(
+        [note("持续咳嗽两个月")],
+        event_texts=["持续咳嗽两个月", "预约医院做进一步检查"],
+    )
+    assert accepted == []
+    assert rejected[0]["reason"] == "not_a_concept"
+
+
+def test_a_term_that_is_a_choice_verbatim_is_rejected():
+    # Measured on the deployed agent: it stored this choice's own wording as a
+    # knowledge note. Nothing can explain it as a concept.
+    accepted, rejected = split_notes(
+        [note("戒烟与活动计划，分阶段执行")],
+        event_texts=["戒烟与活动计划，分阶段执行"],
+    )
+    assert accepted == []
+    assert rejected[0]["reason"] == "not_a_concept"
+
+
+def test_spacing_and_punctuation_do_not_defeat_the_echo_check():
+    accepted, rejected = split_notes(
+        [note("戒烟与活动计划（分阶段执行）")],
+        event_texts=["戒烟与活动计划，分阶段执行"],
+    )
+    assert accepted == []
+    assert rejected[0]["reason"] == "not_a_concept"
+
+
+def test_a_concept_mentioned_inside_a_longer_choice_survives():
+    # 低剂量螺旋 CT is a real concept that also appears inside a choice's text.
+    # Rejecting by containment would discard the one entry worth keeping.
+    accepted, rejected = split_notes(
+        [note("低剂量螺旋 CT", "一种胸部检查方式。")],
+        event_texts=["按建议预约低剂量螺旋 CT 进一步评估"],
+    )
+    assert [entry["term"] for entry in accepted] == ["低剂量螺旋 CT"]
+    assert rejected == []
+
+
+def test_without_event_texts_the_echo_gate_is_inert():
+    accepted, _ = split_notes([note("持续咳嗽两个月")])
+    assert [entry["term"] for entry in accepted] == ["持续咳嗽两个月"]
+
+
+def test_the_note_handler_receives_the_event_texts():
+    stored: list[dict] = []
+    handlers = note_handlers(lambda notes: (stored.extend(notes), len(notes))[1], ["一起调整生活习惯"])
+
+    result = handlers[NOTE_TOOL.name]({"notes": [note("一起调整生活习惯")]})
+
+    assert result["stored"] == 0
+    assert stored == []
+
+
+# --------------------------------------------------------------------------- #
+# near-duplicate collapse
+# --------------------------------------------------------------------------- #
+
+
+def test_punctuation_variants_of_one_concept_collapse():
+    accepted, rejected = split_notes(
+        [note("戒烟与活动计划，分阶段执行"), note("戒烟与活动计划（分阶段执行）")]
+    )
+    assert len(accepted) == 1
+    assert rejected[0]["reason"] == "duplicate"
+
+
+def test_a_longer_form_of_the_same_concept_collapses():
+    accepted, _ = split_notes([note("营养支持"), note("治疗期间的营养支持")])
+    assert len(accepted) == 1
+
+
+def test_two_short_distinct_concepts_are_not_collapsed():
+    # 化疗 and 化疗与放疗 are different things, and a two-character containment is
+    # too weak a signal to silently drop one.
+    accepted, rejected = split_notes([note("化疗"), note("化疗与放疗")])
+    assert len(accepted) == 2
+    assert rejected == []
+
+
+def test_fold_strips_what_carries_no_meaning():
+    assert fold("低剂量螺旋 CT，") == fold("低剂量螺旋ct")
+    assert fold("活检") == fold(" 活检 ")
 
 
 # --------------------------------------------------------------------------- #
