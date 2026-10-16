@@ -113,7 +113,7 @@ def load_corpus(corpus_path: Path | None = None) -> tuple[KnowledgeEntry, ...]:
     return tuple(entries)
 
 
-def _normalise(text: str) -> str:
+def normalise(text: str) -> str:
     """Lowercase, and drop all whitespace.
 
     Chinese has no word delimiters, so a space between 螺旋 and CT is a typing
@@ -139,19 +139,19 @@ def search(
     whenever a player asks about something from an earlier stage, which is
     routine in a five-stage game and would look like a retrieval bug.
     """
-    haystack = _normalise(question)
+    haystack = normalise(question)
     if not haystack:
         return ()
 
     scored: list[tuple[int, KnowledgeEntry]] = []
     for entry in entries:
         score = sum(
-            len(_normalise(keyword))
+            len(normalise(keyword))
             for keyword in entry.keywords
-            if _normalise(keyword) in haystack
+            if normalise(keyword) in haystack
         )
-        if _normalise(entry.title) in haystack:
-            score += len(_normalise(entry.title))
+        if normalise(entry.title) in haystack:
+            score += len(normalise(entry.title))
         if score == 0:
             continue
         if stage and stage in entry.stages:
