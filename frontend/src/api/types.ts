@@ -166,6 +166,14 @@ export interface KnowledgeResponse {
   readonly stage: string;
   /** Notes written. Zero is normal: the stage was already extracted, or nothing new. */
   readonly stored: number;
+  /**
+   * The terms the agent noted. This is what makes the extraction visible at all —
+   * without it a player advances a stage, nothing appears, and the agent looks
+   * like it was never involved.
+   */
+  readonly terms: readonly string[];
+  /** True when this stage had already been extracted, so nothing new was written. */
+  readonly skipped: boolean;
   readonly memoryConfigured: boolean;
   readonly generatedAt: string;
 }

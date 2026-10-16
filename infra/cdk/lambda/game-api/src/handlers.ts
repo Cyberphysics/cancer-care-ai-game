@@ -785,6 +785,8 @@ export async function handleKnowledge(event: HttpApiEvent) {
   return ok({
     stage,
     stored: result.stored ?? 0,
+    terms: result.terms ?? [],
+    skipped: result.skipped ?? false,
     memoryConfigured: result.memoryConfigured ?? false,
     generatedAt: result.generatedAt ?? nowIso(),
   });

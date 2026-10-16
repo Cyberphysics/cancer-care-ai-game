@@ -107,6 +107,10 @@ export interface ExtractResult extends AgentResult {
   readonly kind?: 'extract';
   readonly stage?: string;
   readonly stored?: number;
+  /** The terms the agent noted, so the UI can show what it did rather than just a count. */
+  readonly terms?: readonly string[];
+  /** True when the stage had already been extracted, so nothing new was written. */
+  readonly skipped?: boolean;
   readonly memoryConfigured?: boolean;
 }
 

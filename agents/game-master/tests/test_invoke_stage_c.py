@@ -205,6 +205,41 @@ def test_extract_counts_only_the_notes_that_pass_the_guard(monkeypatch):
     assert [note["term"] for note in recorded[0]] == ["活检"]
 
 
+def test_extract_reports_the_terms_it_noted(monkeypatch):
+    # The UI shows these. Without them the extraction is invisible: the player
+    # advances a stage, nothing appears, and the agent looks uninvolved.
+    monkeypatch.setattr(
+        agent_main, "write_knowledge_notes", lambda _s, _p, _se, _st, notes: len(notes)
+    )
+    monkeypatch.setattr(agent_main, "read_knowledge_notes", lambda *a, **k: [])
+    monkeypatch.setattr(
+        agent_main,
+        "build_provider",
+        lambda _settings: ScriptedProvider(
+            extract_script(
+                [
+                    {"term": "低剂量螺旋 CT", "explanation": "一种胸部检查方式。"},
+                    {"term": "活检", "explanation": "取组织做病理检查。"},
+                ]
+            )
+        ),
+    )
+
+    result = agent_main.invoke(
+        {"kind": "extract", "stage": "screening", "playerId": "p1", "sessionId": "s1"}
+    )
+
+    assert result["terms"] == ["低剂量螺旋 CT", "活检"]
+
+
+def test_a_skipped_extraction_reports_no_terms(monkeypatch):
+    monkeypatch.setattr(agent_main, "read_knowledge_notes", lambda *a, **k: [{"term": "已有"}])
+    result = agent_main.invoke(
+        {"kind": "extract", "stage": "screening", "playerId": "p1", "sessionId": "s1"}
+    )
+    assert result["terms"] == []
+
+
 def test_extract_without_a_stage_is_a_bad_request(monkeypatch):
     result = agent_main.invoke({"kind": "extract"})
     assert result["ok"] is False

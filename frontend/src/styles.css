@@ -853,6 +853,18 @@ code {
   border-color: var(--accent);
 }
 
+/* A chip that is a label rather than a control — the noted terms in StageNotes.
+   Same shape so the two read as the same kind of thing, without inviting a click
+   that would do nothing. */
+.chip-static {
+  color: var(--muted);
+  cursor: default;
+}
+
+.chip-static:hover {
+  border-color: var(--border);
+}
+
 .ask-echo {
   margin-top: 0.9rem;
 }
@@ -880,7 +892,23 @@ code {
 }
 
 .citations li {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
   line-height: 1.5;
+}
+
+.citation-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+/* Hangs the source line under the concept name rather than under the label
+   badge, so the two read as one reference. */
+.citation-source {
+  margin-left: 1.75rem;
 }
 
 .citations a {

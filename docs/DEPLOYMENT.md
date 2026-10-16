@@ -94,6 +94,38 @@ aws iam simulate-principal-policy \
 
 ---
 
+### 1.3 本地开发身份：Memory 的只读探针权限（可选）
+
+`scripts/memory-dump.py` 与 `scripts/memory-skip-probe.py` 需要读取 AgentCore Memory，
+而部署身份那份策略只覆盖控制面与 `InvokeAgentRuntime`。建议单独挂一份**客户管理策略**
+（如 `CancerCareGameMvp-MemoryDataPlaneDev`），只授权下列**只读/写事件**动作，且**限定到本项目
+那一个 Memory 资源 ARN**：
+
+```
+bedrock-agentcore:CreateEvent            # 写入探针事件
+bedrock-agentcore:GetEvent
+bedrock-agentcore:ListEvents
+bedrock-agentcore:ListActors
+bedrock-agentcore:ListSessions
+bedrock-agentcore:ListMemoryRecords
+bedrock-agentcore:RetrieveMemoryRecords
+```
+
+**绝不要加** `bedrock-agentcore:InvokeAgentRuntimeCommand` —— 它能在 Runtime 的 microVM 内以 root
+执行 shell 并读取执行角色凭据。
+
+> ⚠️ 该策略把资源限定到具体的 Memory ARN，而该 ARN 含**随机后缀**。拆栈重建后 Memory ID 会变，
+> 策略随即失效，症状是 `AccessDenied`。届时更新资源列表即可（或改用 `memory/*` 放宽范围）。
+
+两个脚本的用途：
+
+| 脚本 | 回答的问题 |
+|---|---|
+| `memory-dump.py` | 某一局到底往 Memory 写了什么（按 actor/session 列出知识笔记与长期记录） |
+| `memory-skip-probe.py` | `extraction_mode="SKIP"` 是否真的生效（对照法，见脚本头部说明） |
+
+---
+
 ## 2. 构建
 
 ```bash

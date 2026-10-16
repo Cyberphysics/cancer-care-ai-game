@@ -298,15 +298,21 @@ def _extract_notes(body: dict[str, Any], player_id: str, session_id: str) -> dic
             "stage": stage,
             "stored": 0,
             "skipped": True,
+            "terms": [],
             "memoryConfigured": settings.memory_configured,
             "text": "该阶段的知识笔记已存在，本次跳过。",
             "generatedAt": _now_iso(),
         }
 
     stored = 0
+    noted: list[str] = []
 
     def writer(notes: list[dict[str, Any]]) -> int:
         nonlocal stored
+        # Returned to the caller so the UI can show what the agent actually did.
+        # Without this the extraction is invisible — the player advances a stage,
+        # nothing appears, and the agent looks like it was never involved.
+        noted.extend(str(note.get("term", "")) for note in notes)
         stored += write_knowledge_notes(settings, player_id, session_id, stage, notes)
         return stored
 
@@ -335,6 +341,7 @@ def _extract_notes(body: dict[str, Any], player_id: str, session_id: str) -> dic
         "kind": "extract",
         "stage": stage,
         "stored": stored,
+        "terms": noted,
         # With no Memory configured (local dev) nothing persists. That is a
         # no-op the caller can see, not a failure.
         "memoryConfigured": settings.memory_configured,

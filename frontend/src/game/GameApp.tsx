@@ -11,6 +11,7 @@ import {
 import type { EventResponse, SessionResponse } from '../api/types';
 import AskPanel from './AskPanel';
 import EventCard, { type ChoiceResult } from './EventCard';
+import StageNotes, { type StageNotesState } from './StageNotes';
 import HealthPanel from './HealthPanel';
 import NarrationPanel from './NarrationPanel';
 import PatientAvatar from './PatientAvatar';
@@ -43,6 +44,7 @@ export default function GameApp() {
   const [timelineLoading, setTimelineLoading] = useState(false);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [notes, setNotes] = useState<StageNotesState | null>(null);
 
   const completed = session?.status === 'completed';
 
@@ -68,6 +70,7 @@ export default function GameApp() {
       setSession(created);
       setResult(null);
       setTimeline([]);
+      setNotes(null);
       setScreen({ kind: 'playing' });
     } catch (err: unknown) {
       reportError(err);
@@ -110,13 +113,19 @@ export default function GameApp() {
       const response = await advanceStage(session.sessionId);
       setSession(response.session);
 
-      // Fire and forget, deliberately. The game loop must not wait on the agent:
-      // advancing stays fast, and if this fails the next answer simply draws on
-      // the bundled corpus alone. The route is idempotent per stage, so a retry
-      // or a double-fire writes nothing extra.
-      void extractKnowledge(session.sessionId, finishedStage).catch((err: unknown) => {
-        console.warn('知识抽取失败（不影响游戏）', err);
-      });
+      // Not awaited: the game loop must not wait on the agent, so advancing keeps
+      // its own latency. The panel below reports what came back when it arrives,
+      // which is what makes the agent's contribution to this step visible at all —
+      // previously the call was made and its answer thrown away.
+      //
+      // Idempotent per stage, so a retry after a timeout writes nothing extra.
+      setNotes({ kind: 'pending', stage: finishedStage });
+      void extractKnowledge(session.sessionId, finishedStage)
+        .then((data) => setNotes({ kind: 'ok', stage: finishedStage, data }))
+        .catch((err: unknown) => {
+          console.warn('知识归纳失败（不影响游戏）', err);
+          setNotes({ kind: 'failed', stage: finishedStage });
+        });
 
       setResult(null);
       if (response.completed) {
@@ -146,6 +155,7 @@ export default function GameApp() {
     setResult(null);
     setTimeline([]);
     setTimelineLoading(false);
+    setNotes(null);
     setNotice(null);
   }
 
@@ -334,6 +344,10 @@ export default function GameApp() {
               note="按会话缓存：同一会话只会生成一次，之后返回的是同一条内容。"
             />
           )}
+
+          {/* What the extraction produced for the stage just finished. Renders on
+              the advance beat and stays until the next one replaces it. */}
+          {notes && <StageNotes state={notes} />}
 
           {/* Always available, unlike the narration panel: a question can be asked
               at any point, and the answer draws on the bundled corpus whether or

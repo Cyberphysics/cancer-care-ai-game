@@ -130,11 +130,11 @@ export default function AskPanel({ sessionId, stage }: AskPanelProps) {
                 已降级
               </span>
             ) : state.data.citations.length === 0 ? (
-              <span className="badge badge-warn" title="回答没有标注出处，因此无法追溯到来源">
-                无出处
+              <span className="badge badge-warn" title="回答没有标注依据，因此无法追溯到来源">
+                无依据
               </span>
             ) : (
-              <span className="badge badge-ok">{state.data.citations.length} 条出处</span>
+              <span className="badge badge-ok">{state.data.citations.length} 条依据</span>
             )}
           </div>
 
@@ -146,24 +146,38 @@ export default function AskPanel({ sessionId, stage }: AskPanelProps) {
 
           {state.data.citations.length > 0 && (
             <div className="citations">
-              <h3>出处</h3>
+              <h3>依据</h3>
               <ul>
                 {state.data.citations.map((citation) => (
                   <li key={citation.label}>
-                    <span className="badge badge-neutral mono">[{citation.label}]</span>{' '}
-                    <strong>{citation.title}</strong>
-                    <span className="muted small"> —— {citation.source}</span>
+                    {/* Two lines, concept first: several entries share a source
+                        (five cite the American Cancer Society, four cite NCCN), so
+                        leading with the publisher made two distinct passages look
+                        like the same citation printed twice. */}
+                    <div className="citation-head">
+                      <span className="badge badge-neutral mono">[{citation.label}]</span>{' '}
+                      <strong>{citation.title}</strong>
+                    </div>
+                    <div className="citation-source muted small">
+                      依据：{citation.source}
+                    </div>
                     {citation.url && (
-                      <>
-                        {' '}
-                        <a href={citation.url} target="_blank" rel="noreferrer" className="small">
-                          原文
-                        </a>
-                      </>
+                      <a
+                        href={citation.url}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="small"
+                      >
+                        查看全文
+                      </a>
                     )}
                   </li>
                 ))}
               </ul>
+              <p className="muted small">
+                上面是<strong>依据这些资料编写的概念说明，不是原文摘录</strong>，
+                所以不标注具体页码或段落。想看原文请点「查看全文」。
+              </p>
             </div>
           )}
         </>
