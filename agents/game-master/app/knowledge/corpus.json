@@ -1,0 +1,137 @@
+{
+  "version": "1.0",
+  "note": "Medical Education agent's baseline knowledge corpus. Shipped inside the agent zip; GameMaster's session-derived notes are layered on top at runtime via AgentCore Memory.",
+  "authoringRules": [
+    "Concepts are explained; nothing is prescribed. No diagnosis, no individual treatment or drug recommendation, no survival figures.",
+    "Every entry MUST carry a source, because the agent is required to cite one.",
+    "The safety guard forbids any percentage (\\d+%), so efficacy claims must stay qualitative, and it forbids these drug names outright: 顺铂 培美曲塞 吉西他滨 紫杉醇 奥希替尼 厄洛替尼 帕博利珠 纳武利尤 贝伐珠单抗.",
+    "Avoid the phrasings 建议使用 / 推荐使用 / 应当使用 — the guard reads them as drug or treatment recommendations.",
+    "test_knowledge_corpus.py scans every entry with the same guard the agent uses, so a violating entry fails the build.",
+    "Topics are drawn from concepts the player actually meets in the 13-event catalog, not chosen freely."
+  ],
+  "entries": [
+    {
+      "id": "ldct",
+      "title": "低剂量螺旋 CT（LDCT）",
+      "body": "低剂量螺旋 CT 是一种胸部 CT 检查方式，通过降低扫描剂量来减少辐射暴露，同时保持对肺部结构的成像能力。它被用于肺癌高危人群的筛查，目的是在症状出现之前发现肺部异常。与常规胸部 X 线相比，它对肺部小结节的显示更清楚，因此筛查通常采用它而不是胸片。它是一项检查手段，结果需要由医生结合具体情况判读。",
+      "keywords": ["低剂量螺旋CT", "LDCT", "低剂量CT", "螺旋CT", "胸部CT", "肺癌筛查"],
+      "stages": ["screening"],
+      "source": "国家卫生健康委办公厅《肺癌筛查与早诊早治方案（2024年版）》"
+    },
+    {
+      "id": "high-risk-screening",
+      "title": "肺癌高危人群与筛查的意义",
+      "body": "肺癌筛查针对的是「高危人群」，而不是所有人。是否属于高危，通常由年龄、吸烟史、长期二手烟暴露、职业暴露（如石棉、氡等）、慢性肺部疾病以及家族史等因素共同判断。筛查的价值在于把发现的时间点提前，让后续处理的选择空间更大一些。具体某个人是否属于高危、是否需要筛查、间隔多久，需要由医生按照现行指南并结合个人情况判断。",
+      "keywords": ["高危人群", "肺癌筛查", "筛查对象", "二手烟", "职业暴露", "家族史", "吸烟史"],
+      "stages": ["prevention", "screening"],
+      "source": "国家卫生健康委办公厅《肺癌筛查与早诊早治方案（2024年版）》"
+    },
+    {
+      "id": "imaging-not-diagnosis",
+      "title": "影像发现异常，不等于确诊",
+      "body": "影像检查看到「异常」是一个提示，而不是结论。影像描述的是形态和位置上的变化，不少良性情况也会表现为异常影像，尤其是较小的结节。接下来通常需要进一步检查来区分这些可能性，这也是为什么报告上常写着「建议进一步检查」。把「需要弄清楚」和「已经确定」当成两件事，是理解整个检查流程的关键。",
+      "keywords": ["影像异常", "肺部结节", "进一步检查", "影像报告", "不等于确诊"],
+      "stages": ["screening"],
+      "source": "NCCN《肺癌筛查患者指南》（中文版）",
+      "sourceUrl": "https://www.nccn.org/patients/guidelines/content/PDF/lung-screening-zh-patient.pdf"
+    },
+    {
+      "id": "biopsy",
+      "title": "活检与组织学诊断",
+      "body": "活检是取一小块组织送去做病理检查，用来确定病变的性质。它与影像检查的区别在于：影像看的是「长什么样」，病理看的是「是什么」。活检是获得组织学诊断的常规手段，具体采用哪种方式，由医生根据病变的位置和患者情况选择。检查前先了解流程和注意事项，通常能明显降低未知带来的紧张。",
+      "keywords": ["活检", "组织学诊断", "病理检查", "穿刺", "取组织"],
+      "stages": ["screening", "diagnosis"],
+      "source": "美国癌症协会（American Cancer Society）· 肺癌的检测与诊断",
+      "sourceUrl": "https://www.cancer.org/cancer/types/lung-cancer/detection-diagnosis-staging/detection.html"
+    },
+    {
+      "id": "pathology-type",
+      "title": "病理报告的「分型」",
+      "body": "分型描述的是肿瘤的细胞来源和形态特征。肺癌存在不同的病理类型，它们对各类治疗方式的反应并不相同，因此分型会直接影响后续的诊疗安排。分型是病理医生在显微镜下、结合必要的辅助检查得出的结论。报告上的术语对家属来说通常很陌生，它的具体含义适合请主诊医生结合病情逐条解释。",
+      "keywords": ["分型", "病理报告", "病理类型", "组织学类型", "非小细胞肺癌", "小细胞肺癌"],
+      "stages": ["diagnosis"],
+      "source": "美国癌症协会（American Cancer Society）· 肺癌",
+      "sourceUrl": "https://www.cancer.org/cancer/types/lung-cancer.html"
+    },
+    {
+      "id": "pathology-stage",
+      "title": "病理报告的「分期」",
+      "body": "分期描述的是病变的范围：是否局限在原发部位，是否累及周围组织，是否出现在淋巴结或者更远的部位。分期用来说明疾病的整体情况，是制定诊疗计划时的重要依据。它和分型是两个不同的维度——分型回答「是什么」，分期回答「到哪一步」。同样地，报告上的分期需要由主诊医生结合病情解释。",
+      "keywords": ["分期", "病理报告", "肿瘤分期", "淋巴结", "病变范围"],
+      "stages": ["diagnosis"],
+      "source": "美国癌症协会（American Cancer Society）· 肺癌",
+      "sourceUrl": "https://www.cancer.org/cancer/types/lung-cancer.html"
+    },
+    {
+      "id": "genomic-testing",
+      "title": "基因检测与分子分型",
+      "body": "基因检测分析的是肿瘤细胞里的特定基因变化。这些变化可能为治疗方式的选择提供参考依据，因此它在部分肺癌类型中会成为常规评估的一部分。它与病理分型互补：分型回答「是哪种类型」，分子检测回答「有没有可以针对的位点」。是否检测、检测哪些位点，由医生根据病情和现行规范判断。",
+      "keywords": ["基因检测", "分子分型", "驱动基因", "基因突变", "检测位点"],
+      "stages": ["diagnosis", "treatment"],
+      "source": "NCCN《肺癌筛查患者指南》（中文版）",
+      "sourceUrl": "https://www.nccn.org/patients/guidelines/content/PDF/lung-screening-zh-patient.pdf"
+    },
+    {
+      "id": "targeted-therapy",
+      "title": "靶向治疗是什么",
+      "body": "靶向治疗针对的是肿瘤细胞上某些特定的分子改变，而不是笼统地作用于所有快速分裂的细胞。它的前提是先通过检测确认存在可以针对的位点，因此它并不适用于所有患者。与化疗相比，它在作用原理和不良反应的类型上都有区别。是否适用、采用哪一种方案，属于医生根据检测结果和整体病情做出的判断；家属可以做的是理解概念、并把想问的问题记下来。",
+      "keywords": ["靶向治疗", "靶向药", "分子靶向", "驱动基因", "针对性治疗"],
+      "stages": ["treatment"],
+      "source": "NCCN《肺癌筛查患者指南》（中文版）",
+      "sourceUrl": "https://www.nccn.org/patients/guidelines/content/PDF/lung-screening-zh-patient.pdf"
+    },
+    {
+      "id": "immunotherapy",
+      "title": "免疫治疗是什么",
+      "body": "免疫治疗的作用方式是帮助人体自身的免疫系统识别并攻击肿瘤细胞，而不是直接杀伤肿瘤细胞。它与化疗、靶向治疗的作用原理不同，适用条件也不同，因此在部分肺癌类型中成为可选择的治疗方向之一。这类治疗同样有自己的不良反应类型，医生会在开始前说明并安排相应的观察。是否适用，需要医生结合病理类型、分期和身体状况判断。",
+      "keywords": ["免疫治疗", "免疫检查点", "自身免疫系统", "免疫药物"],
+      "stages": ["treatment"],
+      "source": "美国癌症协会（American Cancer Society）· 肺癌",
+      "sourceUrl": "https://www.cancer.org/cancer/types/lung-cancer.html"
+    },
+    {
+      "id": "chemo-radiotherapy",
+      "title": "化疗与放疗的区别",
+      "body": "化疗使用药物作用于全身，放疗使用射线作用于局部，两者的作用范围和原理不同。在肺癌的不同阶段和不同情况下，它们可能单独使用，也可能与其它方式配合。两者各自有常见的、需要留意的不良反应，医生会在开始前说明并安排相应的支持措施。具体的方案与周期属于医生的判断范围，家属能帮上忙的地方通常是观察、记录和反馈。",
+      "keywords": ["化疗", "放疗", "放射治疗", "全身治疗", "局部治疗"],
+      "stages": ["treatment"],
+      "source": "美国癌症协会（American Cancer Society）· 肺癌",
+      "sourceUrl": "https://www.cancer.org/cancer/types/lung-cancer.html"
+    },
+    {
+      "id": "nutrition-during-treatment",
+      "title": "治疗期间的营养支持",
+      "body": "治疗期间营养的重点通常是维持体重和体力，而不是「补得越多越好」。胃口下降、味觉改变、恶心等情况都可能让进食变得困难，少量多餐、选择容易消化的食物，往往比集中进补更容易坚持。营养安排需要个体化——是否有必要使用营养补充制剂、补充什么，应当由医生或临床营养师评估后决定。把每天实际吃进去的情况记下来，复诊时会给医生提供有用的信息。",
+      "keywords": ["营养", "体重", "少量多餐", "胃口", "临床营养", "进食困难"],
+      "stages": ["treatment", "recovery"],
+      "source": "NCCN《肺癌筛查患者指南》（中文版）",
+      "sourceUrl": "https://www.nccn.org/patients/guidelines/content/PDF/lung-screening-zh-patient.pdf"
+    },
+    {
+      "id": "follow-up",
+      "title": "康复期的随访复查",
+      "body": "随访复查是诊疗计划的一部分，目的是在症状出现之前发现变化。康复期感觉良好，并不替代按计划复查——这两件事并不矛盾，随访的价值恰恰在于症状出现之前。复查的频率和项目由医生根据病情和分期制定。把每次复查的结果按时间归档，在后续就诊时能明显减少重复检查和沟通成本。",
+      "keywords": ["随访", "复查", "随访计划", "定期复查", "康复期"],
+      "stages": ["recovery"],
+      "source": "美国癌症协会（American Cancer Society）· 肺癌",
+      "sourceUrl": "https://www.cancer.org/cancer/types/lung-cancer.html"
+    },
+    {
+      "id": "smoking-cessation",
+      "title": "戒烟与可干预的风险因素",
+      "body": "吸烟是肺癌最重要的可干预风险因素之一，戒烟在任何阶段都对健康有益。长期二手烟暴露同样属于需要留意的风险因素，对于不吸烟的家庭成员尤其如此。行为改变最难的部分是维持，分阶段的小目标配合家人陪伴，通常比一次性的决心更容易保持。具体到个人如何戒烟，可以向医生咨询，获取适合自己情况的帮助。",
+      "keywords": ["戒烟", "吸烟", "二手烟", "风险因素", "行为改变"],
+      "stages": ["prevention"],
+      "source": "世界卫生组织（WHO）· 癌症",
+      "sourceUrl": "https://www.who.int/health-topics/cancer"
+    },
+    {
+      "id": "persistent-symptoms",
+      "title": "持续症状与就医时机",
+      "body": "持续数周不缓解的咳嗽、痰中带血、不明原因的胸闷或体重下降，都属于值得就诊评估的信号。出现这些症状本身不代表就是严重疾病，很多情况是良性的。但「先等等看」会让后续的选择空间变小，及时评估换来的是确定的信息，而不是一个结论。把症状出现的时间和变化记下来，就诊时能帮助医生更快了解情况。",
+      "keywords": ["持续咳嗽", "就医时机", "痰中带血", "体重下降", "症状记录", "就诊"],
+      "stages": ["prevention", "screening"],
+      "source": "国家卫生健康委办公厅《肺癌筛查与早诊早治方案（2024年版）》"
+    }
+  ]
+}
