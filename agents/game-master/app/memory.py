@@ -154,8 +154,13 @@ def write_knowledge_notes(
     return written
 
 
-def read_knowledge_notes(settings: Settings, player_id: str, session_id: str) -> list[dict[str, Any]]:
-    """Read back this session's knowledge notes.
+def read_knowledge_notes(
+    settings: Settings,
+    player_id: str,
+    session_id: str,
+    stage: str | None = None,
+) -> list[dict[str, Any]]:
+    """Read back this session's knowledge notes, optionally limited to one stage.
 
     Returns an empty list on any failure: the Medical Education role falls back to
     the bundled corpus, which is a worse answer rather than no answer.
@@ -164,9 +169,29 @@ def read_knowledge_notes(settings: Settings, player_id: str, session_id: str) ->
     `retrieve_memories`, because the latter is served by asynchronous extraction
     and would not see a note written moments ago. Filtering by metadata needs no
     `indexedKeys` declaration (verified by scripts/memory-event-probe.py).
+
+    Passing `stage` is how extraction stays idempotent: see `main._extract_notes`.
     """
     if not settings.memory_configured:
         return []
+
+    filters: list[dict[str, Any]] = [
+        {
+            "left": {"metadataKey": NOTE_METADATA_KEY},
+            # Plain string, not the OperatorType enum: botocore validates this
+            # field as a str and rejects the enum.
+            "operator": "EQUALS_TO",
+            "right": {"metadataValue": _string_value(NOTE_METADATA_VALUE)},
+        }
+    ]
+    if stage is not None:
+        filters.append(
+            {
+                "left": {"metadataKey": "stage"},
+                "operator": "EQUALS_TO",
+                "right": {"metadataValue": _string_value(stage)},
+            }
+        )
 
     try:
         client = _client(settings)
@@ -174,15 +199,7 @@ def read_knowledge_notes(settings: Settings, player_id: str, session_id: str) ->
             memory_id=settings.memory_id,
             actor_id=player_id,
             session_id=session_id,
-            event_metadata=[
-                {
-                    "left": {"metadataKey": NOTE_METADATA_KEY},
-                    # Plain string, not the OperatorType enum: botocore validates
-                    # this field as a str and rejects the enum.
-                    "operator": "EQUALS_TO",
-                    "right": {"metadataValue": _string_value(NOTE_METADATA_VALUE)},
-                }
-            ],
+            event_metadata=filters,
             max_results=100,
         )
     except Exception as err:  # noqa: BLE001 - corpus-only is an acceptable degradation

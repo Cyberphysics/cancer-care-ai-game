@@ -252,36 +252,74 @@ def test_extract_is_safe_to_run_twice_for_the_same_stage(monkeypatch):
     assert flattened(written) == ["活检"]
 
 
-def test_extract_still_adds_a_genuinely_new_term(monkeypatch):
+def test_extract_skips_a_stage_that_already_has_notes(monkeypatch):
+    # Term-level dedup cannot survive a non-deterministic model: asked twice it
+    # phrases notes differently, so every "new" term gets written (measured
+    # against the deployed API). The question that actually holds is whether the
+    # stage has been extracted at all.
     written: list[list[dict]] = []
-    on_record: list[dict] = [{"term": "活检", "explanation": "已有。"}]
 
     def fake_write(_settings, _player, _session, _stage, notes):
         written.append(notes)
-        on_record.extend(notes)
         return len(notes)
 
     monkeypatch.setattr(agent_main, "write_knowledge_notes", fake_write)
-    monkeypatch.setattr(agent_main, "read_knowledge_notes", lambda *a, **k: list(on_record))
+    monkeypatch.setattr(
+        agent_main,
+        "read_knowledge_notes",
+        lambda *a, **k: [{"term": "活检", "explanation": "已有。"}],
+    )
+    provider_used: list[int] = []
     monkeypatch.setattr(
         agent_main,
         "build_provider",
-        lambda _settings: ScriptedProvider(
-            extract_script(
-                [
-                    {"term": "活检", "explanation": "重复的术语。"},
-                    {"term": "低剂量螺旋 CT", "explanation": "新的术语。"},
-                ]
-            )
-        ),
+        lambda _settings: (
+            provider_used.append(1),
+            ScriptedProvider(
+                extract_script([{"term": "低剂量螺旋 CT", "explanation": "措辞不同的新术语。"}])
+            ),
+        )[1],
     )
 
     result = agent_main.invoke(
         {"kind": "extract", "stage": "screening", "playerId": "p1", "sessionId": "s1"}
     )
 
+    assert result["ok"] is True
+    assert result["stored"] == 0
+    assert result["skipped"] is True
+    assert written == []
+    assert provider_used == []  # no model call at all
+
+
+def test_extract_still_runs_for_a_different_stage(monkeypatch):
+    written: list[list[dict]] = []
+
+    def fake_write(_settings, _player, _session, _stage, notes):
+        written.append(notes)
+        return len(notes)
+
+    monkeypatch.setattr(agent_main, "write_knowledge_notes", fake_write)
+    # Notes exist, but not for the stage being extracted.
+    monkeypatch.setattr(
+        agent_main,
+        "read_knowledge_notes",
+        lambda _s, _p, _sess, stage=None: [] if stage == "treatment" else [{"term": "已有"}],
+    )
+    monkeypatch.setattr(
+        agent_main,
+        "build_provider",
+        lambda _settings: ScriptedProvider(
+            extract_script([{"term": "营养", "explanation": "治疗期间的营养重点。"}])
+        ),
+    )
+
+    result = agent_main.invoke(
+        {"kind": "extract", "stage": "treatment", "playerId": "p1", "sessionId": "s1"}
+    )
+
     assert result["stored"] == 1
-    assert flattened(written) == ["低剂量螺旋 CT"]
+    assert result.get("skipped") is None
 
 
 def flattened(batches: list[list[dict]]) -> list[str]:

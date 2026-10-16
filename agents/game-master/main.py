@@ -23,7 +23,7 @@ from typing import Any
 from bedrock_agentcore.runtime import BedrockAgentCoreApp, PingStatus
 
 from app.config import load_settings
-from app.corpus import load_corpus, normalise
+from app.corpus import load_corpus
 from app.memory import (
     read_knowledge_notes,
     recall_preferences,
@@ -280,24 +280,34 @@ def _extract_notes(body: dict[str, Any], player_id: str, session_id: str) -> dic
     if not stage:
         return {"ok": False, "error": "stage 不能为空", "errorType": "BadRequest"}
 
+    # Idempotency by construction, not by comparing terms.
+    #
+    # Deduping on `term` does not survive a non-deterministic model: asked twice
+    # with the same input it phrases the notes differently, so a repeat call
+    # produces a set of genuinely-new terms and every one of them is written
+    # (measured against the deployed API: a second call stored 2 notes). A local
+    # run that happened to match was luck, not correctness.
+    #
+    # A stage is extracted once, when it completes, so "does this stage already
+    # have notes" is the honest question to ask.
+    if read_knowledge_notes(settings, player_id, session_id, stage=stage):
+        logger.info("knowledge notes for stage=%s already exist; skipping extraction", stage)
+        return {
+            "ok": True,
+            "kind": "extract",
+            "stage": stage,
+            "stored": 0,
+            "skipped": True,
+            "memoryConfigured": settings.memory_configured,
+            "text": "该阶段的知识笔记已存在，本次跳过。",
+            "generatedAt": _now_iso(),
+        }
+
     stored = 0
-    on_record = {
-        normalise(str(note.get("term", "")))
-        for note in read_knowledge_notes(settings, player_id, session_id)
-    }
 
     def writer(notes: list[dict[str, Any]]) -> int:
         nonlocal stored
-        # Memory's create_event only appends, so a second extraction for the same
-        # stage would duplicate every note. Re-running is a realistic client bug
-        # (a retry after a timeout, a double tap), so dedupe by term here — that
-        # is what makes the route safe to call twice, rather than intent alone.
-        fresh = [
-            note for note in notes if normalise(str(note.get("term", ""))) not in on_record
-        ]
-        written = write_knowledge_notes(settings, player_id, session_id, stage, fresh)
-        stored += written
-        on_record.update(normalise(str(note.get("term", ""))) for note in fresh)
+        stored += write_knowledge_notes(settings, player_id, session_id, stage, notes)
         return stored
 
     try:
