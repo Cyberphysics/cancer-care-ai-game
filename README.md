@@ -21,14 +21,19 @@
 | 已实现 | 尚未实现 |
 |---|---|
 | 五阶段规则引擎（事件池、选择判定、状态演进） | 完整五页面前端（Phase 4 全量） |
-| HTTP API 9 条路由全部真实实现 | AgentCore Gateway 工具面（**按决定跳过**，理由见 ROADMAP） |
+| HTTP API 11 条路由全部真实实现 | 前端问答框（Stage C 的界面部分，下一轮） |
 | 最小可玩网页（单页状态机，无路由） | 玩家鉴权 |
 | DynamoDB 单表 + 稀疏 GSI + 四项原子事务 | 多癌种、成就系统 |
 | 双乐观锁 + 幂等提交保护 | 审计轨迹（原属 Stage B） |
-| AgentCore Runtime + Memory，`deepseek` 与 `bedrock` 可插拔 provider | |
-| 内容护栏（概念可讲、处方禁止）+ 后端二次校验 | |
+| AgentCore Runtime + Memory，`deepseek` 与 `bedrock` 可插拔 provider | AgentCore Gateway 工具面（**按决定跳过**，理由见 ROADMAP） |
+| **四个 agent 角色**：叙事（`choice`/`summary`）+ 知识抽取（`extract`）+ 只读医学教育问答（`question`） | Care Assistant 角色 |
+| **直连工具循环**（固定两次调用）+ 打包语料 14 条带出处 | |
+| 内容护栏（概念可讲、处方禁止）+ 后端二次校验，**答案与笔记同一把尺** | |
 | S3 + CloudFront（OAC）+ `/api/*` 反代 | |
-| 104 条 TS 测试 + 38 条 Python 测试 + 端到端冒烟脚本（60 项，含 AI 叙事层） | |
+| 118 条 TS 测试 + 140 条 Python 测试 + 实机检查脚本（15 项，真打模型与 Memory） | |
+
+> **Stage C 已实现但尚未部署**——`feat/p3-stage-c-multi-agent` 分支上的代码与测试全绿，
+> 走 API 的端到端验证需要重新部署 Agent 与 Api 两个栈。
 
 > ⚠️ **部署前需完成两项一次性准备**（AgentCore IAM 权限 + DeepSeek key 写入 SSM），
 > 详见 **[docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) §1**。缺少任一项时 Agent 栈无法部署。

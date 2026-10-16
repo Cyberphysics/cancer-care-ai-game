@@ -143,10 +143,17 @@ CloudFront 上有一条 `/api/*` behavior 反向代理到 API Gateway。这带�
 
 ---
 
-## 5. Phase 3：AgentCore 设计（尚未编写 CDK）
+## 5. Phase 3：AgentCore（Runtime 与 Memory 已实现并部署；Gateway 未实现）
 
-> 本节是设计文档。**本轮未创建任何 AgentCore 资源**——`cdk synth` 产物中不含任何
-> `AWS::BedrockAgentCore::*` 资源，这一点由测试与构建流程校验。
+> **实现状态（2026-10-16）。**
+>
+> - **Runtime 与 Memory 已实现并部署**（`CancercareGameMvp-Agent` 栈）。三个角色共用同一个 Runtime，
+>   按请求的 `kind` 分派：`choice` / `summary`（叙事，Stage A）、`extract` / `question`（Stage C）。
+>   契约见 [AGENT-DESIGN.md](AGENT-DESIGN.md)。
+> - **Gateway 未实现**（§5.4、§5.6、§5.7）。Stage C 有意选择**直连工具循环**——同样的 handler、
+>   同样的工具声明，只是不经 MCP。理由见 [ROADMAP.md](ROADMAP.md)。
+> - §5.1–§5.3 与 §5.5 描述的服务事实仍然准确；**§5.4 / §5.6 / §5.7 是未实现的设计**，
+>   其中 §5.7 的代码示例**未经验证，不要照抄**。
 
 ### 5.1 AgentCore 是什么
 
@@ -285,16 +292,30 @@ Lambda handler 需要剥离该前缀；对 OpenAPI/Smithy 目标则由 Gateway �
 Phase 3 的开发过程中极易无意间绕过校验——这是本项目最大的架构风险。
 因此明确规定：**工具 Lambda 用窄权限角色 + 后端校验；AgentCore 执行角色零 DynamoDB 权限。**
 
-### 5.7 CDK 资源映射（Phase 3 使用）
+### 5.7 CDK 资源映射
+
+> **以 `infra/cdk/lib/agent-stack.ts` 为准**——那是唯一已部署、已验证的来源。下面只作说明用途，
+> 且 Gateway 部分**未实现**。
 
 ```ts
 import * as agentcore from 'aws-cdk-lib/aws-bedrockagentcore';
 
+// 这一段是真实写法（与 agent-stack.ts 一致）。注意不是
+// `ManagedMemoryStrategy.userPreference()`：构造器是 `MemoryStrategy.using*`，
+// 且必须传 strategyName 与自定义 namespaces——内建的
+// `/strategies/{memoryStrategyId}/actors/{actorId}` 布局里，{memoryStrategyId}
+// 只有服务端在写入时才知道，读者无法重构该路径。
 const memory = new agentcore.Memory(this, 'GameMemory', {
-  memoryName: 'cancercare-player-preferences',
+  memoryName: agentCoreName('player_memory'),
   memoryStrategies: [
-    agentcore.ManagedMemoryStrategy.userPreference(),
-    agentcore.ManagedMemoryStrategy.semantic(),
+    agentcore.MemoryStrategy.usingUserPreference({
+      strategyName: 'player_preferences',
+      namespaces: ['/players/{actorId}'],
+    }),
+    agentcore.MemoryStrategy.usingSemantic({
+      strategyName: 'player_facts',
+      namespaces: ['/players/{actorId}'],
+    }),
   ],
 });
 
@@ -332,12 +353,19 @@ runtime.addEndpoint('live');
 | Runtime 仅 ARM64；容器与 zip 两种部署路径 | ✅ 已确认 |
 | Handler 契约（8080 / `/invocations` / `/ping`） | ✅ 已确认 |
 | Memory 的 actorId/sessionId 模型与长期策略 | ✅ 已确认 |
-| Gateway 为 MCP；Lambda 目标需 toolSchema；`<target>__<tool>` 前缀 | ✅ 已确认 |
 | `aws-cdk` CLI 2.1145.0 与 `aws-cdk-lib` 2.273.0 可协同 | ✅ **本项目实测**（synth 通过） |
+| `policy/*` 构造在稳定模块中可用，无需 alpha 包 | ✅ **实测确认** |
+| SigV4 调用 Gateway MCP 的 IAM action 名 | ✅ **实测确认**：`bedrock-agentcore:InvokeGateway`（CDK 的 `GATEWAY_INVOKE_PERMS`） |
+| `GatewayAuthorizer.usingAwsIam()` 存在 | ✅ **实测确认**：稳定模块里有，不必再回避到 Cognito |
+| 命名空间模板支持 `{sessionId}` 而不只是 `{actorId}` | ✅ **实测确认**（SDK `memory/session.py`） |
+| `list_events` 的 metadata 过滤**不需要**预先声明 `indexedKeys` | ✅ **实测确认**（`scripts/memory-event-probe.py` 4/4） |
+| DeepSeek 兑现具名 `tool_choice` | ✅ **实测确认**（`finish_reason=tool_calls`） |
+| **`parallel_tool_calls: false` 被 DeepSeek 接受后忽略** | ✅ **实测确认**——一轮多调用是常态 |
+| `extraction_mode="SKIP"` 是否真被服务端兑现 | ⚠️ **未证实**。若被忽略，偏好召回会混入知识笔记（静默失败） |
+| Gateway 工具名的**前缀分隔符**（`__` vs `___`） | ⚠️ **文档互相矛盾**，只能在运行时确认 |
+| Gateway 的**响应信封形状** | ⚠️ **未证实** |
 | Claude 模型推理配置文件 ID 的**确切字符串** | ⚠️ **未证实**。见 §6 |
 | `InvokeAgentRuntime` 的**资源 ARN 格式** | ⚠️ **未证实**。故 IAM 策略暂用 `*` |
-| SigV4 调用 Gateway MCP 的 IAM action 名 | ⚠️ **未证实**。故推荐 CUSTOM_JWT |
-| `policy/*` 构造的稳定性（正式模块 vs alpha 包） | ⚠️ **有冲突**，Phase 3 前需核对 |
 
 ---
 

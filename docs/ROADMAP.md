@@ -138,6 +138,32 @@ GDD 原定的 Phase 1（初始化 React、初始化 CDK、创建 AWS 资源、�
 不传会静默建出用户池、资源服务器、客户端与域名。
 `applyValidatedDelta()`（外部提议路径）目前仍**没有调用方**，是这条路径的入口。
 
+**Stage C（多 Agent 参与：知识沉淀 + 医学教育问答）——已实现，尚未部署**
+
+Stage B 跳过后，改用**直连工具循环**替代 Gateway 来推进「更多 agent 参与」。契约已写入
+[AGENT-DESIGN.md](AGENT-DESIGN.md)。
+
+- **两个新角色**与 GameMaster 共用同一个 Runtime，按请求的 `kind` 分派：
+  - `extract` —— GameMaster 把剧情中出现的医学术语归纳成知识笔记，写入 AgentCore Memory
+  - `question` —— **只读**的 Medical Education，为玩家提问做**带出处**的解答
+- **打包语料** 14 条医学概念，每条带出处，随 agent zip 发布（`app/knowledge/corpus.json`）
+- **工具循环是固定形状，不是通用 ReAct**：第一次强制具名 `tool_choice`，第二次强制禁用工具。
+  两次调用封顶，延迟预算才可证；具名强制也一次性消灭「模型不调工具」与「无据作答」两类退化
+- **同一把护栏管住答案与笔记**：两者都要过 `find_violations`；编造的引用直接丢弃
+- 后端新增 `POST /sessions/{id}/questions` 与 `POST /sessions/{id}/knowledge`。后者由客户端在
+  `/advance` **之后**调用，**绝不嵌进** `/advance`——推进必须保持快且不依赖 agent
+
+**实测推翻的两条原假设**（两条都会让功能「看起来正常但实际错」）：
+
+1. `parallel_tool_calls: false` 被 DeepSeek **接受后忽略**——一轮多调用是**常态**而非边界情况，
+   循环必须给**每个** tool call id 都作答，否则下一次请求直接失败
+2. 降低 `max_tokens` **不是**延迟杠杆：300/400 直接 `finish_reason=length` 截断在句中，而延迟**没有下降**
+   （300 / 400 / 900 token 实测都在 3.0–3.8 秒）。一次完整的两段式循环实测约 **2.9 秒**——
+   原计划里「一次调用约 10 秒」那个数字是端到端（含 Runtime 冷启动），不是模型
+
+**仍未验证**：`extraction_mode="SKIP"` 是否真被服务端兑现（要读 LTM 才能确认，而抽取是异步的）。
+若被静默忽略，偏好召回会混入知识笔记——**失败是静默的**——届时需在 `recall_preferences` 侧加过滤。
+
 **明确不做**：多癌种、多玩家协作
 
 ---
