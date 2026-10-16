@@ -361,7 +361,8 @@ runtime.addEndpoint('live');
 | `list_events` 的 metadata 过滤**不需要**预先声明 `indexedKeys` | ✅ **实测确认**（`scripts/memory-event-probe.py` 4/4） |
 | DeepSeek 兑现具名 `tool_choice` | ✅ **实测确认**（`finish_reason=tool_calls`） |
 | **`parallel_tool_calls: false` 被 DeepSeek 接受后忽略** | ✅ **实测确认**——一轮多调用是常态 |
-| `extraction_mode="SKIP"` 是否真被服务端兑现 | ⚠️ **未证实**。若被忽略，偏好召回会混入知识笔记（静默失败） |
+| `extraction_mode="SKIP"` 是否真被服务端兑现 | ✅ **实测确认**（对照法，`scripts/memory-skip-probe.py`） |
+| 长期记忆抽取的延迟量级 | ✅ **实测约 90 秒**（异步）。这也是知识笔记走强一致 `list_events` 而非长期记录的原因 |
 | Gateway 工具名的**前缀分隔符**（`__` vs `___`） | ⚠️ **文档互相矛盾**，只能在运行时确认 |
 | Gateway 的**响应信封形状** | ⚠️ **未证实** |
 | Claude 模型推理配置文件 ID 的**确切字符串** | ⚠️ **未证实**。见 §6 |
