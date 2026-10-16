@@ -2,9 +2,11 @@ import type {
   AdvanceResponse,
   EventListResponse,
   HealthResponse,
+  KnowledgeResponse,
   NarrationKind,
   NarrationResponse,
   PlayerResponse,
+  QuestionResponse,
   SessionResponse,
   SubmitChoiceResponse,
 } from './types';
@@ -127,4 +129,28 @@ export function advanceStage(sessionId: string): Promise<AdvanceResponse> {
  */
 export function getNarration(sessionId: string, kind: NarrationKind): Promise<NarrationResponse> {
   return post<NarrationResponse>(`/sessions/${sessionId}/narration`, { kind });
+}
+
+/**
+ * Ask the Medical Education role a question.
+ *
+ * Unlike narration this is **not cached** — every question is answered afresh,
+ * and the answer carries the sources it used. The first call in a while also
+ * pays the runtime cold start.
+ */
+export function askQuestion(sessionId: string, question: string): Promise<QuestionResponse> {
+  return post<QuestionResponse>(`/sessions/${sessionId}/questions`, { question });
+}
+
+/**
+ * Have the GameMaster role derive knowledge notes for a stage that just ended.
+ *
+ * Called by the client **after** advancing, never by `/advance` itself: the game
+ * loop must not wait on the agent. Callers should treat this as fire-and-forget —
+ * a failure only means the next answer draws on the bundled corpus alone.
+ *
+ * Idempotent per stage: calling it twice writes nothing the second time.
+ */
+export function extractKnowledge(sessionId: string, stage: string): Promise<KnowledgeResponse> {
+  return post<KnowledgeResponse>(`/sessions/${sessionId}/knowledge`, { stage });
 }

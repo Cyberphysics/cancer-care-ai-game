@@ -131,3 +131,41 @@ export interface NarrationResponse {
   /** True when this came from the session's cache rather than a fresh generation. */
   readonly cached: boolean;
 }
+
+/** One source an answer cites, keyed by the `[S1]`-style label used in the text. */
+export interface Citation {
+  readonly label: string;
+  readonly title: string;
+  /**
+   * The publisher. Either a real clinical source, or the game's own note — the
+   * backend labels session-derived notes honestly rather than dressing them up.
+   */
+  readonly source: string;
+  readonly url?: string | null;
+}
+
+/** POST /api/v1/sessions/{sessionId}/questions — the Medical Education role. */
+export interface QuestionResponse {
+  readonly text: string;
+  readonly kind: 'question';
+  /**
+   * The sources actually used. The backend drops any label the model invented,
+   * so everything here exists — but the list is empty when the answer cited
+   * nothing, which is a visible state rather than a degraded one.
+   */
+  readonly citations: readonly Citation[];
+  /** True only when `text` is the guard's fallback, not a generated answer. */
+  readonly degraded: boolean;
+  readonly provider?: string;
+  readonly modelId?: string;
+  readonly generatedAt: string;
+}
+
+/** POST /api/v1/sessions/{sessionId}/knowledge — the extraction role. */
+export interface KnowledgeResponse {
+  readonly stage: string;
+  /** Notes written. Zero is normal: the stage was already extracted, or nothing new. */
+  readonly stored: number;
+  readonly memoryConfigured: boolean;
+  readonly generatedAt: string;
+}

@@ -4,10 +4,12 @@ import {
   advanceStage,
   createPlayer,
   createSession,
+  extractKnowledge,
   listEvents,
   submitChoice,
 } from '../api/client';
 import type { EventResponse, SessionResponse } from '../api/types';
+import AskPanel from './AskPanel';
 import EventCard, { type ChoiceResult } from './EventCard';
 import HealthPanel from './HealthPanel';
 import NarrationPanel from './NarrationPanel';
@@ -101,9 +103,21 @@ export default function GameApp() {
 
     setBusy(true);
     setNotice(null);
+    // Captured before the call: once the advance succeeds the session has moved
+    // on, and the notes belong to the stage the player just finished.
+    const finishedStage = session.currentStage;
     try {
       const response = await advanceStage(session.sessionId);
       setSession(response.session);
+
+      // Fire and forget, deliberately. The game loop must not wait on the agent:
+      // advancing stays fast, and if this fails the next answer simply draws on
+      // the bundled corpus alone. The route is idempotent per stage, so a retry
+      // or a double-fire writes nothing extra.
+      void extractKnowledge(session.sessionId, finishedStage).catch((err: unknown) => {
+        console.warn('知识抽取失败（不影响游戏）', err);
+      });
+
       setResult(null);
       if (response.completed) {
         // Loaded once, at the end, so the summary can show what was actually
@@ -320,6 +334,11 @@ export default function GameApp() {
               note="按会话缓存：同一会话只会生成一次，之后返回的是同一条内容。"
             />
           )}
+
+          {/* Always available, unlike the narration panel: a question can be asked
+              at any point, and the answer draws on the bundled corpus whether or
+              not this session's knowledge extraction has run. */}
+          <AskPanel sessionId={session.sessionId} stage={session.currentStage} />
         </div>
       </div>
     </>

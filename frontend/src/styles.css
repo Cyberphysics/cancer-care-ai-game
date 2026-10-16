@@ -800,3 +800,89 @@ code {
 .avatar-caption .muted {
   margin: 0;
 }
+
+/* ------------------------------------------------------------------ *
+ * Question box (Stage C)
+ * ------------------------------------------------------------------ */
+
+.ask-input {
+  display: flex;
+  align-items: stretch;
+  gap: 0.5rem;
+}
+
+.ask-input input {
+  flex: 1;
+  min-width: 0;
+  background: rgba(0, 0, 0, 0.25);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  color: var(--text);
+  font-family: inherit;
+  font-size: 1rem;
+  padding: 0.6rem 0.75rem;
+}
+
+.ask-input input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+/* Suggestions are wrapping chips rather than a list: they are prompts, not
+   navigation, and a column of them would read as required steps. */
+.ask-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.4rem;
+  margin-top: 0.75rem;
+}
+
+.chip {
+  background: transparent;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text);
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 0.85rem;
+  padding: 0.3rem 0.7rem;
+}
+
+.chip:hover {
+  border-color: var(--accent);
+}
+
+.ask-echo {
+  margin-top: 0.9rem;
+}
+
+.citations {
+  margin-top: 1rem;
+  border-top: 1px solid var(--border);
+  padding-top: 0.75rem;
+}
+
+.citations h3 {
+  color: var(--muted);
+  font-size: 0.85rem;
+  font-weight: 600;
+  margin: 0 0 0.5rem;
+}
+
+.citations ul {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.citations li {
+  line-height: 1.5;
+}
+
+.citations a {
+  color: var(--accent);
+}
